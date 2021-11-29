@@ -89,7 +89,7 @@ fn parse_value(pair: Pair<Rule>) -> FieldValue {
             let min = &str[1..i0];
             let max = &str[i1..str.len() - 1];
 
-            println!("SUBSTRING {} : {}", min, max);
+            //println!("SUBSTRING {} : {}", min, max);
 
             FieldValue::Int(0)
         },
@@ -109,13 +109,13 @@ fn array_test() {
     assert_eq!( val.as_int().unwrap(), 1 );
 
     let val = parse_value(values.next().unwrap());
-    //assert_eq!( val.as_string().unwrap(), "hi");
+    assert_eq!( val.as_string().unwrap(), "hi");
 
     let val = parse_value(values.next().unwrap());
     assert_eq!( val.as_char().unwrap(), 'q');
     
     let val = parse_value(values.next().unwrap());
-    print!("{:#?}", val);
+    //print!("{:#?}", val);
     //assert_eq!( val.as_range().unwrap(), &(5..10) );
 }
 
@@ -129,8 +129,9 @@ fn range_test() {
 
 #[test]
 fn string_test() {
-    let parsed = PrefabParser::parse(Rule::string, "HI").unwrap();
-    println!("{}", parsed);
+    let mut parsed = PrefabParser::parse(Rule::string, "\"HI\"").unwrap();
+    let val = parse_value(parsed.next().unwrap());
+    println!("Parsed {:#?}", val);
 }
 
 
