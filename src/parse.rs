@@ -59,15 +59,21 @@ fn parse_value(pair: Pair<Rule>) -> FieldValue {
     let str = pair.as_str();
     match pair.as_rule() {
         Rule::int => {
-            let num = str.parse::<i32>().unwrap();
+            let num = str.parse::<i32>().expect(
+                "Error parsing int FieldValue"
+            );
             FieldValue::Int(num)
         },
         Rule::float => {
-            let f = str.parse::<f32>().unwrap();
+            let f = str.parse::<f32>().expect(
+                "Error parsing float FieldValue"
+            );
             FieldValue::Float(f)
         }
         Rule::char => {
-            let ch = str.chars().nth(1).unwrap();
+            let ch = str.chars().nth(1).expect(
+                "Error parsing char FieldValue"
+            );
             FieldValue::Char(ch)
         },
         Rule::string => {
@@ -86,12 +92,14 @@ fn parse_value(pair: Pair<Rule>) -> FieldValue {
             let i0 = str.find("..").unwrap();
             let i1 = str.rfind("..").unwrap() + 2;
 
-            let min = &str[1..i0];
-            let max = &str[i1..str.len() - 1];
+            let min = &str[1..i0].parse::<i32>().expect(
+                "Error parsing min range value"
+            );
+            let max = &str[i1..str.len() - 1].parse::<i32>().expect(
+                "Error parsing max range value"
+            );
 
-            //println!("SUBSTRING {} : {}", min, max);
-
-            FieldValue::Int(0)
+            FieldValue::Range(*min..*max)
         },
         _ => unreachable!()
     }
@@ -115,25 +123,33 @@ fn array_test() {
     assert_eq!( val.as_char().unwrap(), 'q');
     
     let val = parse_value(values.next().unwrap());
-    //print!("{:#?}", val);
-    //assert_eq!( val.as_range().unwrap(), &(5..10) );
+    assert_eq!( val.as_range().unwrap(), &(5..10));
+
+    let cmp_vec: Vec<FieldValue> = vec![0,1,2].iter()
+        .map(|v| FieldValue::Int(*v)).collect();
+    let val = parse_value(values.next().unwrap());
+    let fields = val.as_vec().unwrap();
+    assert!(cmp_vec.iter().all(|item| fields.contains(item)));
+
+    let val = parse_value(values.next().unwrap());
+    assert_eq!( val.as_float().unwrap(), 12.7);
 }
 
 #[test]
 fn range_test() {
-    let range_string = "(15..10)";
+    let range_string = "(5..10)";
     let parse = PrefabParser::parse(Rule::range, range_string).unwrap().next().unwrap();
     let val = parse_value(parse);
-    print!("{:#?}", val);
+    
+    assert_eq!(val.as_range().unwrap(), &(5..10));
 }
 
 #[test]
 fn string_test() {
     let mut parsed = PrefabParser::parse(Rule::string, "\"HI\"").unwrap();
     let val = parse_value(parsed.next().unwrap());
-    println!("Parsed {:#?}", val);
+    assert_eq!(val.as_string().unwrap(), "HI");
 }
-
 
 
 #[test]
@@ -181,22 +197,4 @@ fn test_parser() {
     assert_eq!(renderable_fields[0].name, "glyph");
 
     assert!( matches!(&renderable_fields[0].value, FieldValue::Char('@')));
-}
-
-#[cfg(test)]
-mod test {
-    use pest::{Parser, error::Error, iterators::Pair};
-    use pest_derive::*;
-
-    use crate::prefab::FieldValue;
-
-    #[derive(Parser)]
-    #[grammar = "lazy_prefabs.pest"]
-    struct PrefabParser;
-
-    use super::{parse, parse_value};
-
-    
-
-
 }

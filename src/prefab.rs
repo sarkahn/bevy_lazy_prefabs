@@ -65,6 +65,24 @@ impl FieldValue {
         }
     }
 }
+impl PartialEq for FieldValue {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Int(l0), Self::Int(r0)) => l0 == r0,
+            (Self::Float(l0), Self::Float(r0)) => l0 == r0,
+            (Self::String(l0), Self::String(r0)) => l0 == r0,
+            (Self::Char(l0), Self::Char(r0)) => l0 == r0,
+            (Self::Vec(l0), Self::Vec(r0)) => l0 == r0,
+            (Self::Bool(l0), Self::Bool(r0)) => l0 == r0,
+            (Self::Range(l0), Self::Range(r0)) => l0 == r0,
+            _ => core::mem::discriminant(self) == core::mem::discriminant(other),
+        }
+    }
+}
+
+impl Eq for FieldValue {
+    
+}
 
 #[derive(Debug, Deserialize)]
 pub struct PrefabComponentField {
