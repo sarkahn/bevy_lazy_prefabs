@@ -1,7 +1,10 @@
 use std::ops::Range;
 
-use bevy::{asset::AssetLoader, prelude::*, reflect::{List, TypeUuid}};
+use bevy::{asset::{AssetLoader, LoadedAsset}, prelude::*, reflect::{List, TypeUuid}};
 use serde::Deserialize;
+
+use crate::registry::PrefabRegistry;
+use crate::dynamic_cast::*;
 
 #[derive(Debug,Deserialize)]
 pub enum FieldValue {
@@ -84,49 +87,65 @@ impl Eq for FieldValue {
     
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug)]
 pub struct PrefabComponentField {
     pub name: String,
-    pub value: FieldValue,
+    pub value: Box<dyn Reflect>,
 }
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug)]
 pub struct PrefabComponent {
     pub name: String,
-    pub fields: Option<Vec<PrefabComponentField>>,
+    pub reflect: Box<dyn Reflect>,
 }
 
-#[derive(Debug, Deserialize, TypeUuid)]
+#[derive(Debug, TypeUuid)]
 #[uuid = "289f0b4a-2b90-49d2-af63-61ad2fec867c"]
 pub struct Prefab {
     pub name: Option<String>,
     pub components: Vec<PrefabComponent>,
 }
 
+impl Prefab {
+    pub fn component(&self, name: &str) -> Option<&PrefabComponent> {
+        self.components.iter().find(|c| c.name == name)
+    }
+}
+
 impl Default for Prefab {
     fn default() -> Self {
         Self { 
             name: Default::default(), 
-            components: Vec::new() 
+            components: Vec::new(),
         }
     }
 }
 
-impl AssetLoader for Prefab {
-    fn load<'a>(
-        &'a self,
-        bytes: &'a [u8],
-        load_context: &'a mut bevy::asset::LoadContext,
-    ) -> bevy::asset::BoxedFuture<'a, Result<(), anyhow::Error>> {
-        Box::pin( async move {
-            let prefab_string = std::str::from_utf8(bytes).expect("Error parsing prefab string");
+// impl AssetLoader for Prefab {
+//     fn load<'a>(
+//         &'a self,
+//         bytes: &'a [u8],
+//         load_context: &'a mut bevy::asset::LoadContext,
+//     ) -> bevy::asset::BoxedFuture<'a, Result<(), anyhow::Error>> {
+//         Box::pin( async move {
+//             let prefab_string = std::str::from_utf8(bytes)?;
+//             let prefab = Prefab {
+//                 //serialized: prefab_string.to_string(),
+//                 ..Default::default()
+//             };
+//             load_context.set_default_asset(LoadedAsset::new(prefab));
+            
+//             Ok(())
+//         })
+//     }
 
-            Ok(())
-        })
-    }
+//     fn extensions(&self) -> &[&str] {
+//         &["prefab"]
+//     }
+// }
 
-    fn extensions(&self) -> &[&str] {
-        &["prefab"]
-    }
-}
+// fn asset_load_system(
+//     registry: Res<PrefabRegistry>,
+// ) {
 
+// }

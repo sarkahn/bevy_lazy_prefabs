@@ -11,3 +11,4 @@ serde = { version = "1", features = ["derive"] }
 anyhow = "1.0.4"
 pest = "2.1.3"
 pest_derive = "2.1.0"
+thiserror = "1.0.30"

@@ -1,60 +1,125 @@
-use std::ops::Range;
 
-use pest::{Parser, error::Error, iterators::Pair};
+use thiserror::Error;
+
+use bevy::reflect::{Reflect, DynamicStruct};
+use pest::{Parser, error::Error, iterators::{Pair, Pairs}};
 use pest_derive::*;
 
-use crate::prefab::{FieldValue, Prefab, PrefabComponent, PrefabComponentField};
+use crate::{prefab::{Prefab, PrefabComponent}, registry::PrefabRegistry};
+use crate::dynamic_cast::*;
 
 #[derive(Parser)]
 #[grammar = "lazy_prefabs.pest"]
 struct PrefabParser;
 
-fn parse(input: &str) -> Result<Prefab, Error<Rule>> {
+#[derive(Error, Debug)]
+pub enum PrefabParserError {
+    #[error("Error parsing component - {0} not registered")]
+    UnregisteredComponent(String),
+    #[error("Error parsing prefab")]
+    ParserError(#[from] Error<Rule>),
+}
+
+
+pub fn parse<'a>(input: &str, registry: &'a PrefabRegistry) -> Result<Prefab, PrefabParserError> {
+
+    let mut parsed = match PrefabParser::parse(Rule::prefab, input) {
+        Ok(parsed) => parsed,
+        Err(e) => return Err(PrefabParserError::ParserError(e)),
+    };
+
+    //println!("Parsed: {:#?}", parse_prefab);
 
     let mut prefab = Prefab::default();
 
-    let mut parse_prefab = PrefabParser::parse(Rule::prefab, input)?;
+    //let start = parse_prefab.next().unwrap();
+    //println!("Start: {:#?}", start);
 
-    let prefab_name = parse_prefab.next().unwrap().as_str();
-
-    if !prefab_name.is_empty() {
-        prefab.name = Some(String::from(prefab_name));
-    }
-
-    let components = &mut prefab.components;
-
-    for parse_component in parse_prefab {
-        let mut parse_component = parse_component.into_inner();
-        let type_name = parse_component.next().unwrap().as_str();
-
-        let mut component = PrefabComponent::default();
-        component.name = String::from(type_name);
-
-        for parse_field in parse_component {
-            let mut parse_field = parse_field.into_inner();
-
-            let field_name = parse_field.next().unwrap().as_str();
-            let field_value = parse_field.next().unwrap();
-            
-            let fields = &mut component.fields.get_or_insert(Vec::new());
-
-            let value = parse_value(field_value);
-
-            fields.push(PrefabComponentField {
-                name: String::from(field_name),
-                value: value,
-            });
+    for pair in parsed {
+        match pair.as_rule() {
+            Rule::prefab_name => {
+                prefab.name = Some(pair.as_str().to_string());
+            },
+            Rule::component => {
+                println!("COMPONENT");
+            },
+            _ => unreachable!()
         }
-
-        components.push(component);
     }
 
-    //println!("{:#?}", prefab);
+    // if start.as_rule() == Rule::prefab_name {
+    //     let prefab_name = parse_prefab.next().unwrap().as_str();
+    //     println!("FOUND PREFAB NAME");
+    
+    //     if !prefab_name.is_empty() {
+    //         prefab.name = Some(String::from(prefab_name));
+    //     }
+    // }
 
+    // //println!("Parse: {:#?}", parse_prefab.next().unwrap());
+
+    // let components = &mut prefab.components;
+
+    // for parsed in parse_prefab {
+    //     println!("Parsing component");
+    //     let mut parsed = parsed.into_inner();
+    //     let type_name = parsed.next().unwrap().as_str();
+
+    //     let mut component = match registry.instance_clone(type_name) {
+    //         Some(component) => component,
+    //         None => return Err(PrefabParserError::UnregisteredComponent(String::from(type_name))),
+    //     };
+
+    //     parse_component(&mut component, parsed);
+
+    //     // for parse_field in parsed {
+    //     //     let mut parse_field = parse_field.into_inner();
+
+    //     //     let field_name = parse_field.next().unwrap().as_str();
+    //     //     let field_value = parse_field.next().unwrap();
+            
+    //     //     //let fields = &mut component.fields.get_or_insert(Vec::new());
+
+    //     //     //let value = parse_value(field_value);
+
+    //     //     // fields.push(PrefabComponentField {
+    //     //     //     name: String::from(field_name),
+    //     //     //     value: value,
+    //     //     // });
+    //     // }
+
+    //     components.push(PrefabComponent {
+    //         name: type_name.to_string(),
+    //         reflect: component,
+    //     });
+    // }
+
+//         components.push(component);
     Ok(prefab)
 }
 
-fn parse_value(pair: Pair<Rule>) -> FieldValue {
+fn parse_component(component: &mut Box<dyn Reflect>, parsed_component: Pairs<Rule>) {
+    println!("Parsing component");
+    for parsed_field in parsed_component {
+        let mut parsed_field = parsed_field.into_inner();
+
+        let field_name = parsed_field.next().unwrap().as_str();
+        let field_value = parsed_field.next().unwrap();
+
+        parse_field(component, field_name, field_value);
+        
+        //let fields = &mut component.fields.get_or_insert(Vec::new());
+
+        //let value = parse_value(field_value);
+
+        // fields.push(PrefabComponentField {
+        //     name: String::from(field_name),
+        //     value: value,
+        // });
+    }
+}
+
+fn parse_field(component: &mut Box<dyn Reflect>, field_name: &str, pair: Pair<Rule>) {
     //print!("  {} : ", field_name);
     let str = pair.as_str();
     match pair.as_rule() {
@@ -62,31 +127,31 @@ fn parse_value(pair: Pair<Rule>) -> FieldValue {
             let num = str.parse::<i32>().expect(
                 "Error parsing int FieldValue"
             );
-            FieldValue::Int(num)
+            insert_int(component, field_name, num );
         },
         Rule::float => {
             let f = str.parse::<f32>().expect(
                 "Error parsing float FieldValue"
             );
-            FieldValue::Float(f)
+            
         }
         Rule::char => {
             let ch = str.chars().nth(1).expect(
                 "Error parsing char FieldValue"
             );
-            FieldValue::Char(ch)
+            
         },
         Rule::string => {
             let str = pair.into_inner().as_str();
-            FieldValue::String(String::from(str))
+            
         },
         Rule::array => {
-            let mut vec = Vec::new();
-            for value in pair.into_inner() {
-                vec.push(parse_value(value));
-            }
+            // let mut vec = Vec::new();
+            // for value in pair.into_inner() {
+            //     vec.push(parse_value(value));
+            // }
 
-            FieldValue::Vec(vec)
+            
         },
         Rule::range => {
             let i0 = str.find("..").unwrap();
@@ -99,102 +164,48 @@ fn parse_value(pair: Pair<Rule>) -> FieldValue {
                 "Error parsing max range value"
             );
 
-            FieldValue::Range(*min..*max)
+            
         },
         _ => unreachable!()
     }
 }
- 
 
-#[test]
-fn array_test() {
-    let arr_string = r#"[1, "hi", 'q', (5..10), [0,1,2], 12.7, ],"#;
-    let arr = PrefabParser::parse(Rule::array, arr_string).unwrap().next().unwrap();
-
-    let mut values = arr.into_inner();
-
-    let val = parse_value(values.next().unwrap());
-    assert_eq!( val.as_int().unwrap(), 1 );
-
-    let val = parse_value(values.next().unwrap());
-    assert_eq!( val.as_string().unwrap(), "hi");
-
-    let val = parse_value(values.next().unwrap());
-    assert_eq!( val.as_char().unwrap(), 'q');
-    
-    let val = parse_value(values.next().unwrap());
-    assert_eq!( val.as_range().unwrap(), &(5..10));
-
-    let cmp_vec: Vec<FieldValue> = vec![0,1,2].iter()
-        .map(|v| FieldValue::Int(*v)).collect();
-    let val = parse_value(values.next().unwrap());
-    let fields = val.as_vec().unwrap();
-    assert!(cmp_vec.iter().all(|item| fields.contains(item)));
-
-    let val = parse_value(values.next().unwrap());
-    assert_eq!( val.as_float().unwrap(), 12.7);
-}
-
-#[test]
-fn range_test() {
-    let range_string = "(5..10)";
-    let parse = PrefabParser::parse(Rule::range, range_string).unwrap().next().unwrap();
-    let val = parse_value(parse);
-    
-    assert_eq!(val.as_range().unwrap(), &(5..10));
-}
-
-#[test]
-fn string_test() {
-    let mut parsed = PrefabParser::parse(Rule::string, "\"HI\"").unwrap();
-    let val = parse_value(parsed.next().unwrap());
-    assert_eq!(val.as_string().unwrap(), "HI");
-}
-
-
-#[test]
-fn test_parser() {
-    let prefab_string = "Test (
-        Position {
-            x: 10,
-            y: 15,
+fn insert_int(component: &mut Box<dyn Reflect>, field_name: &str, value: i32) {
+    match component.reflect_mut() {
+        bevy::reflect::ReflectMut::Struct(_) => {
+            println!("INSERTING INT");
+            let component = component.cast_mut::<DynamicStruct>();
+            component.insert(field_name, value);
         },
-        Movable,
-        Renderable {
-            glyph: '@',
-        },
-    )";
-    let prefab = parse(prefab_string).unwrap();
+        bevy::reflect::ReflectMut::TupleStruct(t) => todo!(),
+        bevy::reflect::ReflectMut::Tuple(t) => todo!(),
+        bevy::reflect::ReflectMut::List(l) => todo!(),
+        bevy::reflect::ReflectMut::Map(m) => todo!(),
+        bevy::reflect::ReflectMut::Value(v) => todo!(),
+    }
+}
 
-    assert!(prefab.name.is_some());
-    assert_eq!(prefab.name.unwrap(), "Test");
+#[derive(Default, Reflect)]
+struct TestStruct {
+    i: i32,
+}
 
-    let components = &prefab.components;
+#[test]
+fn test_insert() {
+    let input = "aaa( TestStruct { i: 5 } )";
+    let mut reg = PrefabRegistry::default();
+    reg.register_component::<TestStruct>();
 
-    assert_eq!(components.len(), 3);
-    assert_eq!(components[0].name, "Position");
-    assert_eq!(components[1].name, "Movable");
-    assert_eq!(components[2].name, "Renderable");
+    let prefab = parse(input, &reg).expect("Error");
 
-    let pos = &components[0];
+    if let Some(name) = prefab.name {
+        println!("Prefab name: {}", name);
+    }
+    
+    //let comp = prefab.component("TestStruct");
 
-    assert!(pos.fields.is_some());
-    let pos_field = pos.fields.as_ref().unwrap();
+    //assert!(comp.is_some());
 
-    assert_eq!(pos_field.len(), 2);
+    //let comp = &comp.unwrap().reflect;
 
-    assert_eq!(pos_field[0].name, "x");
-    assert_eq!(pos_field[1].name, "y");
-
-    assert!( matches!(pos_field[0].value, FieldValue::Int(10)) );
-    assert!( matches!(pos_field[1].value, FieldValue::Int(15)) );
-
-    let renderable = &components[2];
-    assert!(renderable.fields.is_some());
-    let renderable_fields = renderable.fields.as_ref().unwrap();
-
-    assert_eq!(renderable_fields.len(), 1);
-    assert_eq!(renderable_fields[0].name, "glyph");
-
-    assert!( matches!(&renderable_fields[0].value, FieldValue::Char('@')));
 }
