@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{prelude::*, reflect::DynamicStruct};
 use bevy_lazy_prefabs::{LazyPrefabsPlugin, PrefabRegistry};
 use bevy::reflect::{TypeRegistryArc, TypeRegistry};
 
@@ -20,25 +20,23 @@ fn spawn_prefab(
         prefabs.register_component::<TestComponentB>();
     }
 
-    let types = world.get_resource::<TypeRegistryArc>().unwrap().clone();
-    let types = types.read();
-
-    let registration = types.get_with_short_name("TestComponentB").expect("Unregistered type");
-    let reflect_component = registration.data::<ReflectComponent>().expect("Unreflected component");
-
-    let mut prefabs = world.get_resource_mut::<PrefabRegistry>().unwrap();
-    let mut proto = prefabs.instance_clone("TestComponentB").unwrap();
-    let prefab = prefabs.load("test.prefab").expect("Error loading prefab");
-
-    proto.apply(&*prefab.components[1].reflect);
-
     let entity = world.spawn().id();
-    reflect_component.add_component(world, entity, &*proto);
+
+    let prefabs = world.get_resource_mut::<PrefabRegistry>().unwrap().clone();
+
+    let mut prefab = DynamicStruct::default();
+    prefab.insert("x", 35i32);
+    
+    let reflect = prefabs.reflect_component("TestComponentB").unwrap();
+    reflect.add_component(world, entity, &prefab);
+    
+
+    let reflect = prefabs.reflect_component("TestComponentA").unwrap();
+    reflect.add_component(world, entity, &prefab);
 }
 
 fn setup(
     mut prefabs: ResMut<PrefabRegistry>,
-    mut types: ResMut<TypeRegistry>,
 ) {
     prefabs.register_component::<TestComponentA>();
     prefabs.register_component::<TestComponentB>();
@@ -47,10 +45,15 @@ fn setup(
 fn print_test_entites(
     input: Res<Input<KeyCode>>,
     q_test: Query<&TestComponentB>,
+    q_a: Query<&TestComponentA>,
 ) {
     if input.just_pressed(KeyCode::Space) {
         for comp in q_test.iter() {
             println!("Found testcomponent: {:#?}", comp);
+        }
+
+        for comp in q_a.iter() {
+            println!("Found testcomponent A");
         }
     }
 }

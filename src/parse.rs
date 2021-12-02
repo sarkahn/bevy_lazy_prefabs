@@ -1,11 +1,13 @@
 
+use std::ops::Range;
+
 use thiserror::Error;
 
-use bevy::reflect::{Reflect, DynamicStruct};
+use bevy::reflect::{Reflect, DynamicStruct, DynamicList, TupleStruct, DynamicTupleStruct, DynamicTuple};
 use pest::{Parser, error::Error, iterators::{Pair, Pairs}};
 use pest_derive::*;
 
-use crate::{prefab::{Prefab, PrefabComponent}, registry::PrefabRegistry};
+use crate::{prefab::*, registry::{PrefabRegistry, ReflectType, TypeInfo}};
 use crate::dynamic_cast::*;
 
 #[derive(Parser)]
@@ -13,196 +15,191 @@ use crate::dynamic_cast::*;
 struct PrefabParser;
 
 #[derive(Error, Debug)]
-pub enum PrefabParserError {
-    #[error("Error parsing component - {0} not registered")]
+pub enum LoadPrefabError {
+    #[error("Error reading prefab file")]
+    PrefabFileReadError(#[from]std::io::Error),
+    #[error("Error parsing component - {0} was not registered with the PrefabRegistry")]
     UnregisteredComponent(String),
     #[error("Error parsing prefab")]
     ParserError(#[from] Error<Rule>),
 }
 
 
-pub fn parse<'a>(input: &str, registry: &'a PrefabRegistry) -> Result<Prefab, PrefabParserError> {
+pub fn parse_prefab(input: &str, registry: &PrefabRegistry) -> Result<Prefab, LoadPrefabError> {
 
-    let mut parsed = match PrefabParser::parse(Rule::prefab, input) {
+    let parsed = match PrefabParser::parse(Rule::prefab, input) {
         Ok(parsed) => parsed,
-        Err(e) => return Err(PrefabParserError::ParserError(e)),
+        Err(e) => return Err(LoadPrefabError::ParserError(e)),
     };
 
-    //println!("Parsed: {:#?}", parse_prefab);
+    let mut prefab_name = None;
+    let mut components = Vec::new();
 
-    let mut prefab = Prefab::default();
-
-    //let start = parse_prefab.next().unwrap();
-    //println!("Start: {:#?}", start);
-
-    for pair in parsed {
-        match pair.as_rule() {
+    for prefab_parse in parsed {
+        match prefab_parse.as_rule() {
             Rule::prefab_name => {
-                prefab.name = Some(pair.as_str().to_string());
+                prefab_name = Some(prefab_parse.as_str().to_string());
             },
+            // Type Name, Components
             Rule::component => {
-                println!("COMPONENT");
+                let mut component_parse = prefab_parse.into_inner();
+
+                let type_name = component_parse.next().unwrap().as_str();
+
+                let type_info = match registry.type_info(type_name) {
+                    Some(t) => t,
+                    None => return Err(LoadPrefabError::UnregisteredComponent(type_name.to_string())),
+                };
+
+                let fields = parse_fields(component_parse);
+
+                let root = match fields {
+                    Some(fields) => Some(build_root(type_info, fields)),
+                    None => None,
+                };
+
+                let comp = match root {
+                    Some(root) => PrefabComponent::new(type_name, root),
+                    None => PrefabComponent::from_type(type_info),
+                };
+
+                components.push(comp);
             },
             _ => unreachable!()
         }
     }
 
-    // if start.as_rule() == Rule::prefab_name {
-    //     let prefab_name = parse_prefab.next().unwrap().as_str();
-    //     println!("FOUND PREFAB NAME");
-    
-    //     if !prefab_name.is_empty() {
-    //         prefab.name = Some(String::from(prefab_name));
-    //     }
-    // }
-
-    // //println!("Parse: {:#?}", parse_prefab.next().unwrap());
-
-    // let components = &mut prefab.components;
-
-    // for parsed in parse_prefab {
-    //     println!("Parsing component");
-    //     let mut parsed = parsed.into_inner();
-    //     let type_name = parsed.next().unwrap().as_str();
-
-    //     let mut component = match registry.instance_clone(type_name) {
-    //         Some(component) => component,
-    //         None => return Err(PrefabParserError::UnregisteredComponent(String::from(type_name))),
-    //     };
-
-    //     parse_component(&mut component, parsed);
-
-    //     // for parse_field in parsed {
-    //     //     let mut parse_field = parse_field.into_inner();
-
-    //     //     let field_name = parse_field.next().unwrap().as_str();
-    //     //     let field_value = parse_field.next().unwrap();
-            
-    //     //     //let fields = &mut component.fields.get_or_insert(Vec::new());
-
-    //     //     //let value = parse_value(field_value);
-
-    //     //     // fields.push(PrefabComponentField {
-    //     //     //     name: String::from(field_name),
-    //     //     //     value: value,
-    //     //     // });
-    //     // }
-
-    //     components.push(PrefabComponent {
-    //         name: type_name.to_string(),
-    //         reflect: component,
-    //     });
-    // }
-
-//         components.push(component);
-    Ok(prefab)
+    Ok(Prefab::new(prefab_name, components))
 }
 
-fn parse_component(component: &mut Box<dyn Reflect>, parsed_component: Pairs<Rule>) {
-    println!("Parsing component");
-    for parsed_field in parsed_component {
-        let mut parsed_field = parsed_field.into_inner();
+fn parse_fields(component_parse: Pairs<Rule>) -> Option<Vec<ReflectField>> {
+    let mut fields = None;
+                
+    // Field Name, Field Value
+    for field_parse in component_parse {
+        let mut field_parse = field_parse.into_inner(); 
+    
+        let fields = fields.get_or_insert(Vec::new());
 
-        let field_name = parsed_field.next().unwrap().as_str();
-        let field_value = parsed_field.next().unwrap();
+        let field_name = field_parse.next().unwrap().as_str();
+        let value_parse = field_parse.next().unwrap();
 
-        parse_field(component, field_name, field_value);
+        let field = ReflectField {
+            name: field_name.to_string(),
+            value: parse_value(value_parse),
+        };
         
-        //let fields = &mut component.fields.get_or_insert(Vec::new());
+        fields.push(field);
+    }
+    fields
+}
 
-        //let value = parse_value(field_value);
-
-        // fields.push(PrefabComponentField {
-        //     name: String::from(field_name),
-        //     value: value,
-        // });
+/// Build a root object from a list of fields
+fn build_root(type_info: &TypeInfo, fields: Vec<ReflectField>) -> Box<dyn Reflect> {
+    match type_info.reflect_type {
+        ReflectType::Struct => {
+            let mut root = DynamicStruct::default();
+            for field in fields {
+                root.insert_boxed(&field.name, field.value);
+            }
+            Box::new(root)
+        },
+        ReflectType::TupleStruct => {
+            let mut root = DynamicTupleStruct::default();
+            for field in fields {
+                root.insert_boxed(field.value);
+            }
+            Box::new(root)
+        },
+        ReflectType::Tuple => {
+            let mut root = DynamicTuple::default();
+            for field in fields {
+                root.insert_boxed(field.value);
+            }
+            Box::new(root)
+        },
+        ReflectType::List => todo!(),
+        ReflectType::Map => todo!(),
+        ReflectType::Value => todo!(),
     }
 }
 
-fn parse_field(component: &mut Box<dyn Reflect>, field_name: &str, pair: Pair<Rule>) {
-    //print!("  {} : ", field_name);
-    let str = pair.as_str();
+fn parse_value(pair: Pair<Rule>) -> Box<dyn Reflect> {
+    let value_string = pair.as_str();
     match pair.as_rule() {
         Rule::int => {
-            let num = str.parse::<i32>().expect(
+            let num = value_string.parse::<i32>().expect(
                 "Error parsing int FieldValue"
             );
-            insert_int(component, field_name, num );
+            Box::new(num)
         },
         Rule::float => {
-            let f = str.parse::<f32>().expect(
+            let f = value_string.parse::<f32>().expect(
                 "Error parsing float FieldValue"
             );
-            
+            Box::new(f)
         }
         Rule::char => {
-            let ch = str.chars().nth(1).expect(
+            let ch = value_string.chars().nth(1).expect(
                 "Error parsing char FieldValue"
             );
-            
+            Box::new(ch as u8)
         },
         Rule::string => {
             let str = pair.into_inner().as_str();
-            
+            Box::new(str.to_string())
         },
         Rule::array => {
-            // let mut vec = Vec::new();
-            // for value in pair.into_inner() {
-            //     vec.push(parse_value(value));
-            // }
+            let mut list = DynamicList::default();
 
-            
+            for value in pair.into_inner() {
+                let array_val = parse_value(value);
+                list.push_box(array_val);
+            }
+
+            Box::new(list)
         },
         Rule::range => {
-            let i0 = str.find("..").unwrap();
-            let i1 = str.rfind("..").unwrap() + 2;
+            let i0 = value_string.find("..").unwrap();
+            let i1 = value_string.rfind("..").unwrap() + 2;
 
-            let min = &str[1..i0].parse::<i32>().expect(
+            let start = &value_string[1..i0].parse::<i32>().expect(
                 "Error parsing min range value"
             );
-            let max = &str[i1..str.len() - 1].parse::<i32>().expect(
+            let end = &value_string[i1..value_string.len() - 1].parse::<i32>().expect(
                 "Error parsing max range value"
             );
 
-            
+            Box::new(Range::<i32> {
+                start: *start,
+                end: *end,
+            })
         },
         _ => unreachable!()
     }
 }
 
-fn insert_int(component: &mut Box<dyn Reflect>, field_name: &str, value: i32) {
-    match component.reflect_mut() {
-        bevy::reflect::ReflectMut::Struct(_) => {
-            println!("INSERTING INT");
-            let component = component.cast_mut::<DynamicStruct>();
-            component.insert(field_name, value);
-        },
-        bevy::reflect::ReflectMut::TupleStruct(t) => todo!(),
-        bevy::reflect::ReflectMut::Tuple(t) => todo!(),
-        bevy::reflect::ReflectMut::List(l) => todo!(),
-        bevy::reflect::ReflectMut::Map(m) => todo!(),
-        bevy::reflect::ReflectMut::Value(v) => todo!(),
-    }
-}
-
-#[derive(Default, Reflect)]
-struct TestStruct {
-    i: i32,
-}
 
 #[test]
 fn test_insert() {
+    
+    #[derive(Default, Reflect)]
+    struct TestStruct {
+        i: i32,
+    }
+
     let input = "aaa( TestStruct { i: 5 } )";
     let mut reg = PrefabRegistry::default();
     reg.register_component::<TestStruct>();
 
-    let prefab = parse(input, &reg).expect("Error");
+    let prefab = parse_prefab(input, &reg).expect("Error");
 
-    if let Some(name) = prefab.name {
-        println!("Prefab name: {}", name);
+    {
+        assert_eq!("aaa", prefab.name().unwrap());
+        assert_eq!(1, prefab.components().len());
     }
     
-    //let comp = prefab.component("TestStruct");
+    let comp = prefab.component("TestStruct").as_ref();
 
     //assert!(comp.is_some());
 

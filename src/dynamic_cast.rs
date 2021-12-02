@@ -1,6 +1,5 @@
-use bevy::reflect::{Reflect, DynamicStruct, Struct};
-
-
+use bevy::reflect::{Reflect, DynamicStruct, Struct, GetTypeRegistration};
+use thiserror::Error;
 
 pub trait DynamicCast: Reflect {
     /// Downcast to `&T` and unwrap immediately. Will panic if
@@ -21,15 +20,69 @@ impl DynamicCast for dyn Reflect {
     }
 }
 
+#[derive(Error, Debug)]
+pub enum GetValueError {
+    #[error("The field {0} doesn't exist on the reflected type {1}")]
+    FieldDoesntExist(String, String),
+    #[error("The type {0} failed to downcast into the type {1}")]
+    FailedCast(String,String),
+}
+
 pub trait GetValue {
-    /// Retrieves the given value from a field and unwraps immediately.
+    /// Retrieves a reference to the given type from a field and unwraps immediately.
     /// Will panic if given the wrong type or the field doesn't exist.
     fn get<T: Reflect>(&self, field_name: &str) -> &T;
+
+    /// Tries to retrieve a reference to the given type.
+    fn try_get<T: Reflect + GetTypeRegistration>(&self, field_name: &str) -> Result<&T, GetValueError>;
+
+    /// Retrieves a mutable reference to the given type from a field and unwraps immediately.
+    /// Will panic if given the wrong type or the field doesn't exist.
+    fn get_mut<T: Reflect>(&mut self, field_name: &str) -> &mut T;
+        
+    /// Tries to retrieve a mutable reference to the given type.
+    fn try_get_mut<T: Reflect + GetTypeRegistration>(&mut self, field_name: &str) -> Result<&mut T, GetValueError>;
 }
 
 impl GetValue for DynamicStruct {
     fn get<T: Reflect>(&self, field_name: &str) -> &T {
         self.field(field_name).unwrap().downcast_ref::<T>().unwrap()
+    }
+
+    fn try_get<T: Reflect + GetTypeRegistration>(&self, field_name: &str) -> Result<&T, GetValueError> {
+        match self.field(field_name) {
+            Some(field) => {
+                match field.downcast_ref::<T>() {
+                    Some(value) => Ok(value),
+                    None => Err(GetValueError::FailedCast(
+                        "DynamicStruct".to_string(), 
+                        T::get_type_registration().name().to_string()))
+                }
+            },
+            None => Err(GetValueError::FieldDoesntExist(
+                field_name.to_string(), 
+                T::get_type_registration().name().to_string()))
+        }
+    }
+
+    fn get_mut<T: Reflect>(&mut self, field_name: &str) -> &mut T {
+        self.field_mut(field_name).unwrap().downcast_mut::<T>().unwrap()
+    }
+
+    fn try_get_mut<T: Reflect + GetTypeRegistration>(&mut self, field_name: &str) -> Result<&mut T, GetValueError> {
+        match self.field_mut(field_name) {
+            Some(field) => {
+                match field.downcast_mut::<T>() {
+                    Some(value) => Ok(value),
+                    None => Err(GetValueError::FailedCast(
+                        "DynamicStruct".to_string(), 
+                        T::get_type_registration().name().to_string()))
+                }
+            },
+            None => Err(GetValueError::FieldDoesntExist(
+                field_name.to_string(), 
+                T::get_type_registration().name().to_string()))
+        }
     }
 }
 
@@ -61,6 +114,22 @@ mod test {
 
         assert_eq!(a.i, 5);
         assert_eq!(a.q, 10);
+    }
+
+    #[test]
+    fn mut_test() {
+        let a = Test {
+            i: 0,
+            q: 0
+        };
+
+        let mut a = a.clone_dynamic();
+
+        let i = a.get_mut::<i32>("i");
+
+        *i = 10;
+
+        assert_eq!(*a.get::<i32>("i"), 10i32);
     }
     
     #[test]
