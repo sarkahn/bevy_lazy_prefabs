@@ -1,6 +1,6 @@
 use bevy::{prelude::*, reflect::DynamicStruct};
 use bevy_lazy_prefabs::{LazyPrefabsPlugin, PrefabRegistry};
-use bevy::reflect::{TypeRegistryArc, TypeRegistry};
+
 
 #[derive(Reflect, Default, Debug)]
 #[reflect(Component)]
@@ -55,7 +55,7 @@ fn print_test_entites(
             println!("Found testcomponent: {:#?}", comp);
         }
 
-        for comp in q_a.iter() {
+        for _comp in q_a.iter() {
             println!("Found testcomponent A");
         }
     }

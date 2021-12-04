@@ -1,17 +1,12 @@
-
 mod prefab;
 mod parse;
 mod registry;
 mod prefab_reflect;
 mod commands;
 mod dynamic_cast;
-mod bundle;
-
-use std::borrow::Borrow;
-use std::sync::Arc;
 
 use bevy::prelude::*;
-use bevy::reflect::{TypeRegistryArc,TypeRegistry, DynamicStruct};
+use bevy::reflect::{TypeRegistry, DynamicStruct};
 
 pub use registry::{ 
     PrefabRegistry as PrefabRegistryInternal, 

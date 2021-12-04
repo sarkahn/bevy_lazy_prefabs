@@ -1,6 +1,6 @@
-use bevy::{prelude::*, ecs::system::Command, reflect::{DynamicStruct, TypeRegistry}};
+use bevy::{prelude::*, ecs::system::Command};
 
-use crate::{registry::{PrefabRegistry, PrefabRegistryArc}, prefab::Prefab};
+use crate::{registry::{PrefabRegistryArc}};
 
 pub struct SpawnPrefab {
     prefab_name: String,

@@ -2,7 +2,7 @@ use bevy_lazy_prefabs::*;
 use bevy::prelude::*;
 
 fn setup (
-    mut registry: ResMut<PrefabRegistry>,
+    registry: ResMut<PrefabRegistry>,
 ) {
     let mut registry = registry.write();
     registry.register_component::<Transform>();
@@ -21,7 +21,7 @@ fn query(
 ) {
     if input.just_pressed(KeyCode::Space) {
         println!("Running query...");
-        for (transform,visible) in q.iter() {
+        for (transform,_visible) in q.iter() {
             println!("Found components! Value of Transform: {:#?}", transform);
         }
     }

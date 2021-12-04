@@ -15,7 +15,7 @@ fn setup(
     let type_registry = type_registry.read();
     let res = type_registry.get_with_short_name(name);
 
-    let bundle = PbrBundle::default();
+    let _bundle = PbrBundle::default();
     let info = PbrBundle::type_info();
 
     for t in info {

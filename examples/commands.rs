@@ -12,7 +12,7 @@ struct TestComponentB {
 }
 
 fn setup (
-    mut registry: ResMut<PrefabRegistry>,
+    registry: ResMut<PrefabRegistry>,
 ) {
     let mut registry = registry.write();
     registry.register_component::<TestComponentA>();
@@ -31,7 +31,7 @@ fn query(
 ) {
     if input.just_pressed(KeyCode::Space) {
         println!("Running query...");
-        for (a,b) in q.iter() {
+        for (_a,b) in q.iter() {
             println!("Found components! Value of b.x: {}", b.x);
         }
     }
