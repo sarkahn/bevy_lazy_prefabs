@@ -5,6 +5,7 @@ pub trait DynamicCast: Reflect {
     /// Downcast to `&T` and unwrap immediately. Will panic if
     /// given the wrong type.
     fn cast_ref<T: Reflect>(&self) -> &T;
+
     /// Downcast to `&mut T` and unwrap immediately. Will panic if given
     /// the wrong type.
     fn cast_mut<T: Reflect>(&mut self) -> &mut T;
@@ -147,6 +148,6 @@ mod test {
         let b = a.clone_dynamic();
         let bi = b.get::<i32>("i");
 
-        assert_eq!(bi, &15);
+        assert_eq!(*bi, 15);
     }
 }

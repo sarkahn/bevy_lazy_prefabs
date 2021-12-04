@@ -233,7 +233,7 @@ mod test {
 
         let mut reg = PrefabRegistry::default();
         
-        reg.register_component::<Vec3>();
+        reg.register_type::<Vec3>();
 
         let mut parse = PrefabParser::parse(Rule::vec3, input).unwrap();
         let parse = parse.next().unwrap();
@@ -252,8 +252,8 @@ mod test {
     fn transform_parse() {
         let mut reg = PrefabRegistry::default();
 
-        reg.register_component::<Vec3>();
-        reg.register_component::<Transform>();
+        reg.register_type::<Vec3>();
+        reg.register_type::<Transform>();
 
         let input = "Transform { translation: Vec3 { y: 3.5, x: 10.5 } }";
 

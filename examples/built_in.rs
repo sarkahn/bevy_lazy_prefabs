@@ -2,9 +2,9 @@ use bevy::prelude::*;
 use bevy_lazy_prefabs::*;
 
 fn setup(mut registry: ResMut<PrefabRegistry>) {
-    registry.register_component::<Transform>();
-    registry.register_component::<Visible>();
-    registry.register_component::<Draw>();
+    registry.register_type::<Transform>();
+    registry.register_type::<Visible>();
+    registry.register_type::<Draw>();
 }
 
 fn do_spawn(mut commands: Commands) {
@@ -23,7 +23,7 @@ fn query(input: Res<Input<KeyCode>>, q: Query<(&Transform, &Visible)>) {
 fn main() {
     App::build()
         .add_plugins(DefaultPlugins)
-        .add_plugin(LazyPrefabsPlugin)
+        .add_plugin(plugins::LazyPrefabsMinimalPlugin)
         .add_startup_system(setup.system())
         .add_startup_system(do_spawn.system())
         .add_system(query.system())

@@ -6,7 +6,6 @@ use std::fs;
 use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use bevy::{
-    prelude::*,
     reflect::{GetTypeRegistration, Reflect},
     utils::HashMap,
 };
@@ -25,8 +24,8 @@ impl PrefabRegistryArc {
         self.internal.write().unwrap()
     }
 
-    pub fn register_component<T: Reflect + Default + GetTypeRegistration>(&mut self) {
-        self.internal.write().unwrap().register_component::<T>();
+    pub fn register_type<T: Reflect + Default + GetTypeRegistration>(&mut self) {
+        self.internal.write().unwrap().register_type::<T>();
     }
 }
 
@@ -38,7 +37,7 @@ pub struct PrefabRegistry {
 
 impl PrefabRegistry {
     /// Register a new type of prefab.
-    pub fn register_component<T: Reflect + Default + GetTypeRegistration>(&mut self) {
+    pub fn register_type<T: Reflect + Default + GetTypeRegistration>(&mut self) {
         let instance = T::default();
         let registration = T::get_type_registration();
 
@@ -51,22 +50,13 @@ impl PrefabRegistry {
         self.type_info_map.insert(info.type_name.to_string(), info);
     }
 
-    pub fn registration(&self, type_name: &str) -> Option<&TypeRegistration> {
-        //self.type_map.get(type_name)
-        match self.type_info_map.get(type_name) {
-            Some(t) => Some(&t.registration),
-            None => None,
-        }
+    pub fn type_info(&self, type_name: &str) -> Option<&TypeInfo> {
+        //println!("TYPENAME {}", type_name);
+        self.type_info_map.get(type_name)
     }
-
-    pub fn reflect_component(&self, type_name: &str) -> Option<&ReflectComponent> {
-        let registration = self.registration(type_name)?;
-        registration.data::<ReflectComponent>()
-    }
-
-    pub fn reflect_clone(&self, type_name: &str) -> ReflectComponent {
-        let reg = self.registration(type_name).unwrap().clone();
-        reg.data::<ReflectComponent>().unwrap().to_owned()
+    
+    pub fn get_prefab(&self, prefab_name: &str) -> Option<&Prefab> {
+        self.prefab_map.get(prefab_name)
     }
 
     pub fn load(&mut self, prefab_name: &str) -> Result<&Prefab, LoadPrefabError> {
@@ -87,30 +77,17 @@ impl PrefabRegistry {
             Err(e) => Err(e),
         }
     }
+    
+    pub fn reflect_component(&self, type_name: &str) -> Option<&ReflectComponent> {
+        let registration = self.registration(type_name)?;
+        registration.data::<ReflectComponent>()
+    }
 
-    pub fn reflect_type(&self, type_name: &str) -> Option<&ReflectType> {
+    fn registration(&self, type_name: &str) -> Option<&TypeRegistration> {
+        //self.type_map.get(type_name)
         match self.type_info_map.get(type_name) {
-            Some(t) => Some(&t.reflect_type),
+            Some(t) => Some(&t.registration),
             None => None,
-        }
-    }
-
-    pub fn type_info(&self, type_name: &str) -> Option<&TypeInfo> {
-        //println!("TYPENAME {}", type_name);
-        self.type_info_map.get(type_name)
-    }
-
-    pub fn get_prefab(&self, prefab_name: &str) -> Option<&Prefab> {
-        self.prefab_map.get(prefab_name)
-    }
-
-    pub fn register_bundle<T: Bundle>(&self) {
-        let bundle_name = std::any::type_name::<T>();
-        let bundle_name = TypeRegistration::get_short_name(bundle_name);
-        println!("Components for {}", bundle_name);
-        for t in T::type_info() {
-            let component_name = TypeRegistration::get_short_name(t.type_name());
-            println!("{}", component_name);
         }
     }
 }
@@ -145,29 +122,12 @@ pub struct TypeInfo {
     pub registration: TypeRegistration,
 }
 
-impl TypeInfo {
-    pub fn reflect_component(&self) -> Option<&ReflectComponent> {
-        self.registration.data::<ReflectComponent>()
-    }
-
-    pub fn add_component<T: Reflect + 'static>(
-        &self,
-        world: &mut World,
-        entity: Entity,
-        component: T,
-    ) {
-        let rc = self.registration.data::<ReflectComponent>().unwrap();
-        rc.add_component(world, entity, &component);
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::PrefabRegistry;
     use crate::dynamic_cast::*;
     use bevy::{
-        prelude::*,
-        reflect::{DynamicStruct, DynamicTuple, Reflect},
+        reflect::{DynamicStruct, Reflect}, prelude::*, utils::HashMap,
     };
 
     #[derive(Reflect, Default)]
@@ -180,8 +140,8 @@ mod test {
     #[test]
     fn load_test() {
         let mut reg = PrefabRegistry::default();
-        reg.register_component::<TestComponentA>();
-        reg.register_component::<TestComponentB>();
+        reg.register_type::<TestComponentA>();
+        reg.register_type::<TestComponentB>();
 
         let prefab = reg.load("test.prefab").unwrap();
 
@@ -193,19 +153,40 @@ mod test {
         let compb = compb.cast_ref::<DynamicStruct>();
 
         assert_eq!(35, *compb.get::<i32>("x"));
+        let mut a = Handle::<Mesh>::default();
+        a.init();
+    }
+
+    struct Map {
+        map: HashMap<String, Box<dyn FnMut(&mut Box<dyn Reflect>)>>,
+    }
+
+    impl Map {
+        fn insert(&mut self) {
+            let func = |mesh: &mut Box<dyn Reflect>| {
+                let mesh = mesh.downcast_ref::<Handle<Mesh>>().unwrap();
+            };
+            let func = Box::new(func);
+            self.map.insert("Hi".to_string(), func);
+        }
     }
 
     #[test]
-    fn bundle_test() {
-        let reg = PrefabRegistry::default();
-        reg.register_bundle::<PbrBundle>();
+    fn box_func() {
+        let mut map = HashMap::default();
+
+        map.insert("Hello", |mesh: &Box<dyn Reflect>| {
+            let mesh = mesh.downcast_ref::<Handle<Mesh>>();
+        });
+
+    }
+    trait ComponentInitializer {
+        fn init(&mut self);
     }
 
-    #[test]
-    fn vec_test() {
-        let v = Vec3::default();
-        let _d = DynamicTuple::default();
-
-        let _v = v.clone_value();
+    impl ComponentInitializer for Handle<Mesh> {
+        fn init(&mut self) {
+            
+        }
     }
 }

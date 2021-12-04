@@ -12,8 +12,8 @@ struct TestComponentB {
 }
 
 fn setup(mut registry: ResMut<PrefabRegistry>) {
-    registry.register_component::<TestComponentA>();
-    registry.register_component::<TestComponentB>();
+    registry.register_type::<TestComponentA>();
+    registry.register_type::<TestComponentB>();
 }
 
 fn do_spawn(mut commands: Commands) {
@@ -31,7 +31,7 @@ fn query(input: Res<Input<KeyCode>>, q: Query<(&TestComponentA, &TestComponentB)
 fn main() {
     App::build()
         .add_plugins(DefaultPlugins)
-        .add_plugin(LazyPrefabsPlugin)
+        .add_plugin(plugins::LazyPrefabsMinimalPlugin)
         .add_startup_system(setup.system())
         .add_startup_system(do_spawn.system())
         .add_system(query.system())
