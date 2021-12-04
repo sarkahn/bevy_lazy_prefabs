@@ -1,38 +1,28 @@
 use bevy_lazy_prefabs::*;
 use bevy::prelude::*;
 
-#[derive(Reflect, Default)]
-#[reflect(Component)]
-struct TestComponentA;
-
-#[derive(Reflect, Default)]
-#[reflect(Component)]
-struct TestComponentB {
-    x: i32
-}
-
 fn setup (
     mut registry: ResMut<PrefabRegistry>,
 ) {
     let mut registry = registry.write();
-    registry.register_component::<TestComponentA>();
-    registry.register_component::<TestComponentB>();
+    registry.register_component::<Transform>();
+    registry.register_component::<Visible>();
 }
 
 fn do_spawn(
     mut commands: Commands
 ) {
-    commands.spawn_prefab("test.prefab");
+    commands.spawn_prefab("builtin.prefab");
 }
 
 fn query(
     input: Res<Input<KeyCode>>,
-    q: Query<(&TestComponentA, &TestComponentB)>,
+    q: Query<(&Transform, &Visible)>,
 ) {
     if input.just_pressed(KeyCode::Space) {
         println!("Running query...");
-        for (a,b) in q.iter() {
-            println!("Found components! Value of b.x: {}", b.x);
+        for (transform,visible) in q.iter() {
+            println!("Found components! Value of Transform: {:#?}", transform);
         }
     }
 }

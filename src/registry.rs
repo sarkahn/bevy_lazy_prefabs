@@ -1,6 +1,6 @@
 use std::collections::hash_map::Entry;
 use std::fs;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use crate::dynamic_cast::*;
 use crate::parse::{parse_prefab, Rule, LoadPrefabError};
 use crate::prefab::Prefab;
@@ -17,8 +17,19 @@ use bevy::{
     },
 };
 
+#[derive(Default, Clone)]
 pub struct PrefabRegistryArc {
     pub internal: Arc<RwLock<PrefabRegistry>>,
+}
+
+impl PrefabRegistryArc {
+    pub fn read(&self) -> RwLockReadGuard<'_, PrefabRegistry> {
+        self.internal.read().unwrap()
+    }
+
+    pub fn write(&self) ->  RwLockWriteGuard<'_, PrefabRegistry> {
+        self.internal.write().unwrap()
+    }
 }
 
 #[derive(Default)]
@@ -30,16 +41,16 @@ pub struct PrefabRegistry {
     type_info_map: HashMap<String, TypeInfo>,
 }
 
-impl Clone for PrefabRegistry {
-    fn clone(&self) -> Self {
-        Self { 
-            prefab_map: self.prefab_map.clone(), 
-            type_info_map: self.type_info_map.clone() 
-        }
-    }
-}
+// impl Clone for PrefabRegistry {
+//     fn clone(&self) -> Self {
+//         Self { 
+//             prefab_map: self.prefab_map.clone(), 
+//             type_info_map: self.type_info_map.clone() 
+//         }
+//     }
+// }
 
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub enum ReflectType {
     Struct,
     TupleStruct,
@@ -142,7 +153,7 @@ impl PrefabRegistry {
         let path = ["assets/prefabs/", prefab_name].join("");
         let prefab_string = match fs::read_to_string(path) {
             Ok(str) => str,
-            Err(e) => return Err(LoadPrefabError::PrefabFileReadError(e)),
+            Err(e) => return Err(LoadPrefabError::FileReadError(e)),
         };
         match parse_prefab(&prefab_string, self) {
             Ok(prefab) => {
@@ -161,15 +172,30 @@ impl PrefabRegistry {
     }
 
     pub fn type_info(&self, type_name: &str) -> Option<&TypeInfo> {
+        //println!("TYPENAME {}", type_name);
         self.type_info_map.get(type_name)
+    }
+
+    pub fn get_prefab(&self, prefab_name: &str) -> Option<&Prefab> {
+        self.prefab_map.get(prefab_name)
+    }
+
+    pub fn register_bundle<T: Bundle>(&self) {
+        let bundle_name = std::any::type_name::<T>();
+        let bundle_name = TypeRegistration::get_short_name(bundle_name);
+        println!("Components for {}", bundle_name);
+        for t in T::type_info() {
+            let component_name = TypeRegistration::get_short_name(t.type_name());
+            println!("{}", component_name);
+        }
     }
 }
 
 #[cfg(test)]
 mod test {
-    use bevy::reflect::{Reflect, DynamicStruct};
+    use bevy::{reflect::{Reflect, DynamicStruct, DynamicTupleStruct, DynamicTuple}, prelude::*};
     use super::PrefabRegistry;
-    use crate::dynamic_cast::*;
+    use crate::{dynamic_cast::*, registry::ReflectType};
 
     #[derive(Reflect, Default)]
     struct TestComponentA;
@@ -195,18 +221,20 @@ mod test {
 
         assert_eq!(35, *compb.get::<i32>("x"));
     }
-
-    #[derive(Reflect, Debug, Clone)]
-    struct SomeComponent {
-        i: i32,
-        q: i32,
-    }
     
-    impl Default for SomeComponent {
-        fn default() -> Self {
-            Self { i: 0, q: 99 }
-        }
+    #[test]
+    fn bundle_test() {
+        let mut reg = PrefabRegistry::default();
+        reg.register_bundle::<PbrBundle>();
     }
-    
 
+
+    #[test]
+    fn vec_test() {
+        let mut v = Vec3::default();
+        let mut d = DynamicTuple::default();
+
+        let v = v.clone_value();
+
+    }
 }

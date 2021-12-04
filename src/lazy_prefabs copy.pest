@@ -11,9 +11,6 @@ char = { "'" ~
 (LETTER | PUNCTUATION | SYMBOL | ASCII_DIGIT)
 ~ "'" }
 
-vec2 = { "Vec2" ~ "{" ~ fields ~ "}" }
-vec3 = { "Vec3" ~ "{" ~ fields ~ "}" }  
-
 string_inner = _{ (!"\"" ~ (LETTER | NUMBER | SYMBOL | PUNCTUATION))* }
 inner_silent = @{ string_inner }
 string = ${ "\"" ~ inner_silent ~ "\"" }
@@ -28,13 +25,13 @@ type_name = @{ id_letter ~ (id_letter | NUMBER )* }
 field_name = @{ id_letter ~ (id_letter | NUMBER )* }
 prefab_name = @{ id_letter ~ (id_letter | NUMBER )* }
 
-value = _{ vec2 | vec3 | float | int | char | string | range | array | component }
+value = _{ float | int | char | string | range | array }
 
 field = { field_name ~ ":" ~ value }
 fields = _{ field ~ ("," ~ field)* ~ ","? }
 
-component = {  type_name ~ component_fields* }
-component_fields = _{ "{" ~ ((field | component) ~ ","? )* ~ "}" } 
+component = { type_name ~ component_fields? }
+component_fields = _{ "{" ~ fields ~ "}" } 
 components = _{ component ~ ("," ~ component)* ~ ","? }
 
 prefab = _{ prefab_name? ~ "(" ~ components ~ ")" }

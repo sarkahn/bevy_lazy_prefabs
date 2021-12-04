@@ -1,6 +1,6 @@
 use bevy::{prelude::*, ecs::system::Command, reflect::{DynamicStruct, TypeRegistry}};
 
-use crate::{registry::PrefabRegistry, prefab::Prefab};
+use crate::{registry::{PrefabRegistry, PrefabRegistryArc}, prefab::Prefab};
 
 pub struct SpawnPrefab {
     prefab_name: String,
@@ -10,13 +10,23 @@ impl Command for SpawnPrefab {
     fn write(self: Box<Self>, world: &mut World) {          
         let entity = world.spawn().id();
 
-        let mut reg = world.get_resource::<PrefabRegistry>().unwrap().clone();
-        let prefab = reg.load(self.prefab_name.as_str()).unwrap().clone();
+        {
+            let reg = world.get_resource_mut::<PrefabRegistryArc>().unwrap().clone();
+            let mut reg = reg.write();
+            reg.load(self.prefab_name.as_str()).unwrap();
+        }
+        
+        let reg = world.get_resource::<PrefabRegistryArc>().unwrap().clone();
+        let reg = reg.read();
+        
+        let prefab = reg.get_prefab(self.prefab_name.as_str()).unwrap();
 
         for component in prefab.components() {
-            println!("Adding {}", component.name());
             let reflect = reg.reflect_component(&component.name()).unwrap();
+
             let root = &**component.root();
+            //println!("Adding {}", component.name());
+
             reflect.add_component(world, entity, root);
         }
     }

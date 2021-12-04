@@ -5,6 +5,7 @@ mod registry;
 mod prefab_reflect;
 mod commands;
 mod dynamic_cast;
+mod bundle;
 
 use std::borrow::Borrow;
 use std::sync::Arc;
@@ -12,13 +13,16 @@ use std::sync::Arc;
 use bevy::prelude::*;
 use bevy::reflect::{TypeRegistryArc,TypeRegistry, DynamicStruct};
 
-pub use registry::PrefabRegistry;
+pub use registry::{ 
+    PrefabRegistry as PrefabRegistryInternal, 
+    PrefabRegistryArc as PrefabRegistry 
+};
 pub use commands::SpawnPrefabCommands;
 
 pub struct LazyPrefabsPlugin;
 impl Plugin for LazyPrefabsPlugin {
     fn build(&self, app: &mut AppBuilder) {
-        app.init_resource::<registry::PrefabRegistry>();
+        app.init_resource::<registry::PrefabRegistryArc>();
     }
 }
 
@@ -52,10 +56,21 @@ fn reflect_example2(
     world: &mut World
 ) {
     let entity = world.spawn().id();
+    
+    {
+        let registry = world.get_resource_mut::<PrefabRegistry>().unwrap();
+        let mut registry = registry.write();
+        registry.load("hi").unwrap();
+    }
+
     let registry = world.get_resource::<PrefabRegistry>().unwrap().clone();
+    let registry = registry.read();
+
+    let prefab = registry.get_prefab("hi").unwrap();
+
+    let component = &**prefab.component_from_index(0).root();
+
     let reflect = registry.reflect_component("Hi").unwrap();
 
-    let prefab = DynamicStruct::default();
-
-    reflect.add_component(world, entity, &prefab);
+    reflect.add_component(world, entity, component);
 }

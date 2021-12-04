@@ -13,10 +13,25 @@ pub struct ReflectField {
     pub value: Box<dyn Reflect>,
 }
 
+impl From<ReflectField> for (String, Box<dyn Reflect>) {
+    fn from(field: ReflectField) -> Self {
+        (field.name, field.value)
+    }
+}
+
 #[derive(Debug)]
 pub struct PrefabComponent {
     name: String,
-    root: Box<dyn Reflect>,
+    dynamic_value: Box<dyn Reflect>,
+}
+
+impl From<PrefabComponent> for ReflectField {
+    fn from(comp: PrefabComponent) -> Self {
+        ReflectField {
+            name: comp.name,
+            value: comp.dynamic_value,
+        }
+    }
 }
 
 impl PrefabComponent {
@@ -27,7 +42,7 @@ impl PrefabComponent {
     pub fn new(name: &str, root: Box<dyn Reflect>) -> Self {
         PrefabComponent {
             name: name.to_string(),
-            root
+            dynamic_value: root
         }
     }
 
@@ -36,11 +51,11 @@ impl PrefabComponent {
     }
 
     pub fn root(&self) -> &Box<dyn Reflect> {
-        &self.root
+        &self.dynamic_value
     }
 
     pub fn root_mut(&mut self) -> &mut Box<dyn Reflect> {
-        &mut self.root
+        &mut self.dynamic_value
     }
 }
 
@@ -48,7 +63,7 @@ impl Clone for PrefabComponent {
     fn clone(&self) -> Self {
         Self { 
             name: self.name.clone(), 
-            root: self.root.clone_value() 
+            dynamic_value: self.dynamic_value.clone_value() 
         }
     }
 }
@@ -57,7 +72,7 @@ impl From<&TypeInfo> for PrefabComponent {
     fn from(t: &TypeInfo) -> Self {
         PrefabComponent {
             name: t.type_name.to_string(),
-            root: match t.reflect_type {
+            dynamic_value: match t.reflect_type {
                 ReflectType::Struct => Box::new(DynamicStruct::default()),
                 ReflectType::TupleStruct => Box::new(DynamicTupleStruct::default()),
                 ReflectType::Tuple => Box::new(DynamicTuple::default()),
@@ -97,5 +112,9 @@ impl Prefab {
 
     pub fn components(&self) -> &Vec<PrefabComponent> {
         &self.components
+    }
+
+    pub fn component_from_index(&self, index: usize) -> &PrefabComponent {
+        &self.components[index]
     }
 }

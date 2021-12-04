@@ -3,7 +3,7 @@ use std::ops::Range;
 
 use thiserror::Error;
 
-use bevy::reflect::{Reflect, DynamicStruct, DynamicList, TupleStruct, DynamicTupleStruct, DynamicTuple};
+use bevy::{reflect::{Reflect, DynamicStruct, DynamicList, TupleStruct, DynamicTupleStruct, DynamicTuple}, prelude::*};
 use pest::{Parser, error::Error, iterators::{Pair, Pairs}};
 use pest_derive::*;
 
@@ -17,19 +17,23 @@ struct PrefabParser;
 #[derive(Error, Debug)]
 pub enum LoadPrefabError {
     #[error("Error reading prefab file")]
-    PrefabFileReadError(#[from]std::io::Error),
+    FileReadError(#[from]std::io::Error),
     #[error("Error parsing component - {0} was not registered with the PrefabRegistry")]
-    UnregisteredComponent(String),
-    #[error("Error parsing prefab")]
-    ParserError(#[from] Error<Rule>),
+    UnregisteredType(String),
+    #[error("Pest error parsing prefab string")]
+    PestParseError(#[from] Error<Rule>),
+    #[error("Error parsing prefab value - unknown value rule {0}")]
+    ValueTypeError(String),
+    #[error("Error parsing prefab component - unknown component rule {0}")]
+    ComponentRuleError(String),
 }
 
 
-pub fn parse_prefab(input: &str, registry: &PrefabRegistry) -> Result<Prefab, LoadPrefabError> {
+pub fn parse_prefab(input: &str, registry: &mut PrefabRegistry) -> Result<Prefab, LoadPrefabError> {
 
     let parsed = match PrefabParser::parse(Rule::prefab, input) {
         Ok(parsed) => parsed,
-        Err(e) => return Err(LoadPrefabError::ParserError(e)),
+        Err(e) => return Err(LoadPrefabError::PestParseError(e)),
     };
 
     let mut prefab_name = None;
@@ -42,56 +46,61 @@ pub fn parse_prefab(input: &str, registry: &PrefabRegistry) -> Result<Prefab, Lo
             },
             // Type Name, Components
             Rule::component => {
-                let mut component_parse = prefab_parse.into_inner();
+                let component_parse = prefab_parse.into_inner();
 
-                let type_name = component_parse.next().unwrap().as_str();
-
-                let type_info = match registry.type_info(type_name) {
-                    Some(t) => t,
-                    None => return Err(LoadPrefabError::UnregisteredComponent(type_name.to_string())),
+                match parse_component(component_parse, registry) {
+                    Ok(component) => components.push(component),
+                    Err(e) => return Err(e),
                 };
-
-                let fields = parse_fields(component_parse);
-
-                let root = match fields {
-                    Some(fields) => Some(build_root(type_info, fields)),
-                    None => None,
-                };
-
-                let comp = match root {
-                    Some(root) => PrefabComponent::new(type_name, root),
-                    None => PrefabComponent::from_type(type_info),
-                };
-
-                components.push(comp);
             },
-            _ => unreachable!()
+            _ => {
+                let str = format!("{:#?}", prefab_parse.as_rule());
+                return Err(LoadPrefabError::ComponentRuleError(str));
+            }
         }
     }
 
     Ok(Prefab::new(prefab_name, components))
 }
 
-fn parse_fields(component_parse: Pairs<Rule>) -> Option<Vec<ReflectField>> {
-    let mut fields = None;
-                
-    // Field Name, Field Value
-    for field_parse in component_parse {
-        let mut field_parse = field_parse.into_inner(); 
-    
-        let fields = fields.get_or_insert(Vec::new());
+fn parse_component(component_parse: Pairs<Rule>, registry: &mut PrefabRegistry) -> Result<PrefabComponent, LoadPrefabError> {
+    let mut type_name = None;
+    let mut fields = Vec::new();
 
-        let field_name = field_parse.next().unwrap().as_str();
-        let value_parse = field_parse.next().unwrap();
-
-        let field = ReflectField {
-            name: field_name.to_string(),
-            value: parse_value(value_parse),
-        };
-        
-        fields.push(field);
+    for component_parse in component_parse {
+        match component_parse.as_rule() {
+            Rule::type_name => {
+                type_name = Some(component_parse.as_str().to_string());
+                println!("Component Type name {}", component_parse.as_str());
+            },
+            Rule::component => {
+                let nested_component = parse_component(component_parse.into_inner(), registry).unwrap();
+                fields.push(ReflectField::from(nested_component));
+            },
+            Rule::field => {
+                let field = parse_field(component_parse.into_inner())?;
+                fields.push(field);
+            }
+            _ => unreachable!()
+        }
     }
-    fields
+    let type_name = type_name.unwrap();
+    let type_info = match registry.type_info(&type_name) {
+        Some(i) => i,
+        None => return Err(LoadPrefabError::UnregisteredType(type_name)),
+    };
+    let root = build_root(type_info, fields);
+    Ok(PrefabComponent::new(type_name.as_str(), root))
+}
+
+fn parse_field(mut field_parse: Pairs<Rule>) -> Result<ReflectField, LoadPrefabError> {
+    let field_name = field_parse.next().unwrap().as_str();
+    let value = parse_value(field_parse.next().unwrap())?;
+
+    Ok(ReflectField {
+        name: field_name.to_string(),
+        value
+    })
 }
 
 /// Build a root object from a list of fields
@@ -124,40 +133,40 @@ fn build_root(type_info: &TypeInfo, fields: Vec<ReflectField>) -> Box<dyn Reflec
     }
 }
 
-fn parse_value(pair: Pair<Rule>) -> Box<dyn Reflect> {
+fn parse_value(pair: Pair<Rule>) -> Result<Box<dyn Reflect>, LoadPrefabError> {
     let value_string = pair.as_str();
     match pair.as_rule() {
         Rule::int => {
             let num = value_string.parse::<i32>().expect(
                 "Error parsing int FieldValue"
             );
-            Box::new(num)
+            Ok(Box::new(num))
         },
         Rule::float => {
             let f = value_string.parse::<f32>().expect(
                 "Error parsing float FieldValue"
             );
-            Box::new(f)
+            Ok(Box::new(f))
         }
         Rule::char => {
             let ch = value_string.chars().nth(1).expect(
                 "Error parsing char FieldValue"
             );
-            Box::new(ch as u8)
+            Ok(Box::new(ch as u8))
         },
         Rule::string => {
             let str = pair.into_inner().as_str();
-            Box::new(str.to_string())
+            Ok(Box::new(str.to_string()))
         },
         Rule::array => {
             let mut list = DynamicList::default();
 
             for value in pair.into_inner() {
-                let array_val = parse_value(value);
+                let array_val = parse_value(value)?;
                 list.push_box(array_val);
             }
 
-            Box::new(list)
+            Ok(Box::new(list))
         },
         Rule::range => {
             let i0 = value_string.find("..").unwrap();
@@ -170,39 +179,71 @@ fn parse_value(pair: Pair<Rule>) -> Box<dyn Reflect> {
                 "Error parsing max range value"
             );
 
-            Box::new(Range::<i32> {
+            Ok(Box::new(Range::<i32> {
                 start: *start,
                 end: *end,
-            })
+            }))
         },
-        _ => unreachable!()
+        Rule::vec3 => {
+            let mut v = Vec3::default();
+            for field in pair.into_inner() {
+                let (name, val) = parse_field(field.into_inner()).unwrap().into();
+                let val = val.cast_ref::<f32>();
+                match name.as_str() {
+                    "x" => v.x = *val,
+                    "y" => v.y = *val,
+                    "z" => v.z = *val,
+                    _ => {} // Error here?
+                };
+            }
+            Ok(Box::new(v))
+        },
+        _ => {
+            let str = format!("{:#?}", pair.as_rule());
+            return Err(LoadPrefabError::ValueTypeError(str))
+        }
     }
 }
 
+#[test]
+fn vec_parse() {
+    let input = "Vec3 { z: 3.0, x: 10.0 }";
+
+    let mut reg = PrefabRegistry::default();
+    reg.register_component::<Vec3>();
+
+    let mut parse = PrefabParser::parse(Rule::vec3, input).unwrap();
+    let parse = parse.next().unwrap();
+
+    let mut v = Vec3::default();
+
+    let dynamic = parse_value(parse).unwrap();
+
+    v.apply(&*dynamic);
+
+    assert_eq!(v.x, 10.0);
+    assert_eq!(v.z, 3.0);
+}
 
 #[test]
-fn test_insert() {
-    
-    #[derive(Default, Reflect)]
-    struct TestStruct {
-        i: i32,
-    }
-
-    let input = "aaa( TestStruct { i: 5 } )";
+fn transform_parse() {
     let mut reg = PrefabRegistry::default();
-    reg.register_component::<TestStruct>();
-
-    let prefab = parse_prefab(input, &reg).expect("Error");
-
-    {
-        assert_eq!("aaa", prefab.name().unwrap());
-        assert_eq!(1, prefab.components().len());
-    }
     
-    let comp = prefab.component("TestStruct").as_ref();
+    reg.register_component::<Vec3>();
+    reg.register_component::<Transform>();
 
-    //assert!(comp.is_some());
+    let input = "Transform { translation: Vec3 { y: 3.5, x: 10.5 } }";
 
-    //let comp = &comp.unwrap().reflect;
+    let mut parsed = PrefabParser::parse(Rule::component, input).unwrap();
 
+    let parsed = parsed.next().unwrap().into_inner();
+
+    let comp = parse_component(parsed, &mut reg).unwrap();
+
+    let mut transform = Transform::default();
+
+    transform.apply(&**comp.root());
+
+    assert_eq!(transform.translation.y, 3.5);
+    assert_eq!(transform.translation.x, 10.5);
 }

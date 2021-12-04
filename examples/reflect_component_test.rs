@@ -15,14 +15,16 @@ fn spawn_prefab(
     world: &mut World
 ) {
     {
-        let mut prefabs = world.get_resource_mut::<PrefabRegistry>().unwrap();
+        let prefabs = world.get_resource_mut::<PrefabRegistry>().unwrap();
+        let mut prefabs = prefabs.write();
         prefabs.register_component::<TestComponentA>();
         prefabs.register_component::<TestComponentB>();
     }
 
     let entity = world.spawn().id();
 
-    let prefabs = world.get_resource_mut::<PrefabRegistry>().unwrap().clone();
+    let prefabs = world.get_resource::<PrefabRegistry>().unwrap().clone();
+    let prefabs = prefabs.read();
 
     let mut prefab = DynamicStruct::default();
     prefab.insert("x", 35i32);
@@ -36,8 +38,9 @@ fn spawn_prefab(
 }
 
 fn setup(
-    mut prefabs: ResMut<PrefabRegistry>,
+    prefabs: ResMut<PrefabRegistry>,
 ) {
+    let mut prefabs = prefabs.write();
     prefabs.register_component::<TestComponentA>();
     prefabs.register_component::<TestComponentB>();
 }
