@@ -8,7 +8,6 @@ struct SpawnPrefab {
 
 impl Command for SpawnPrefab {
     fn write(self: Box<Self>, world: &mut World) {
-        println!("SPAWNING PREFAB");
         world.resource_scope(|world, mut reg: Mut<PrefabRegistry>| {
             // Load the prefab if it's not already loaded
             reg.load(self.prefab_name.as_str()).unwrap();
@@ -16,12 +15,15 @@ impl Command for SpawnPrefab {
             let prefab = reg.get_prefab(self.prefab_name.as_str()).unwrap();
 
             let mut entity = world.spawn();
-            
+
             if let Some(processors) = prefab.processors() {
                 for data in processors {
-                    let processor = reg.get_processor(data.key()).unwrap_or_else(||
-                        panic!("Error spawning prefab, the processor {} hasn't been registered", data.key())
-                    );
+                    let processor = reg.get_processor(data.key()).unwrap_or_else(|| {
+                        panic!(
+                            "Error spawning prefab, the processor {} hasn't been registered",
+                            data.key()
+                        )
+                    });
                     processor.process_prefab(data.properties(), &mut entity);
                 }
             }

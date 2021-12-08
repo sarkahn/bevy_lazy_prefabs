@@ -1,4 +1,3 @@
-use crate::bundle::PrefabBundleLoader;
 use crate::parse::{parse_prefab, LoadPrefabError, ReflectType};
 use crate::prefab::Prefab;
 use crate::processor::PrefabProcessor;
@@ -16,8 +15,6 @@ use bevy::{
 pub struct PrefabRegistry {
     prefab_map: HashMap<String, Prefab>,
     type_info_map: HashMap<String, TypeInfo>,
-    //bundle_map: HashMap<String, Box<dyn FnMut(&mut EntityMut) + Send + Sync>>,
-    bundle_map: HashMap<String, Box<dyn PrefabBundleLoader + Send + Sync>>,
     processor_map: HashMap<String, Box<dyn PrefabProcessor + Send + Sync>>,
 }
 
@@ -38,14 +35,18 @@ impl PrefabRegistry {
     }
 
     pub fn type_info(&self, type_name: &str) -> Option<&TypeInfo> {
-        //println!("TYPENAME {}", type_name);
         self.type_info_map.get(type_name)
     }
 
+    /// Retrieve a prefab from the registry if it's been `load`ed yet.
     pub fn get_prefab(&self, prefab_name: &str) -> Option<&Prefab> {
         self.prefab_map.get(prefab_name)
     }
 
+    /// Load the prefab from disk, or retrieve it if it's already been loaded.
+    /// Note this will cache the parsed prefab data so it will stay in memory even
+    /// if it's not longer used. You can use the `remove_prefab` function  to remove it
+    /// from the registry.
     pub fn load(&mut self, prefab_name: &str) -> Result<&Prefab, LoadPrefabError> {
         if self.prefab_map.contains_key(prefab_name) {
             return Ok(&self.prefab_map[prefab_name]);
@@ -65,7 +66,13 @@ impl PrefabRegistry {
         }
     }
 
-    pub fn reflect_component(&self, type_name: &str) -> Option<&ReflectComponent> {
+    /// Remove the given prefab from the registry. It will need to be loaded from disk
+    /// again if re-loaded.
+    pub fn remove_prefab(&mut self, prefab_name: &str) {
+        self.prefab_map.remove(prefab_name);
+    }
+
+    pub(crate) fn reflect_component(&self, type_name: &str) -> Option<&ReflectComponent> {
         let registration = self.registration(type_name)?;
         registration.data::<ReflectComponent>()
     }
@@ -78,35 +85,22 @@ impl PrefabRegistry {
         }
     }
 
-    pub fn add_bundle_loader(&mut self, loader: Box<dyn PrefabBundleLoader + Send + Sync>) {
-        self.bundle_map.insert(loader.key().to_string(), loader);
-    }
-
-    pub fn add_bundle_loader_t<T: PrefabBundleLoader + Default + Send + Sync + 'static>(&mut self) {
-        let t = T::default();
-        self.add_bundle_loader(Box::new(t));
-    }
-
-    pub fn get_bundle_loader(&self, name: &str) -> Option<&dyn PrefabBundleLoader> {
-        if let Some(loader) = self.bundle_map.get(name) {
-            return Some(&**loader);
-        }
-        None
-    }
-
+    /// Retrieve a registered [PrefabProcessor].
     pub fn get_processor(&self, key: &str) -> Option<&dyn PrefabProcessor> {
         match self.processor_map.get(key) {
             Some(processor) => Some(&**processor),
-            None => None
+            None => None,
         }
     }
 
-    fn register_processor<T: PrefabProcessor + Default + Send + Sync + 'static>(&mut self) {
+    /// Initialize a [PrefabProcessor] by type.
+    pub fn init_processor<T: PrefabProcessor + Default + Send + Sync + 'static>(&mut self) {
         let p = T::default();
         self.processor_map.insert(p.key().to_string(), Box::new(p));
     }
 
-    fn add_processor(&mut self, processor: Box<dyn PrefabProcessor + Send + Sync + 'static>) {
+    /// Add a [PrefabProcessor] to the registry.
+    pub fn add_processor(&mut self, processor: Box<dyn PrefabProcessor + Send + Sync + 'static>) {
         self.processor_map
             .insert(processor.key().to_string(), processor);
     }
@@ -136,7 +130,6 @@ impl PrefabRegisterProcessor for AppBuilder {
     }
 
     fn add_prefab_processor(&mut self, processor: Box<dyn PrefabProcessor + Send + Sync>) {
-        processor.on_init(self);
         let world = self.world_mut();
         let mut reg = world.get_resource_mut::<PrefabRegistry>().unwrap();
         reg.add_processor(processor);

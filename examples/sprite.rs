@@ -14,7 +14,6 @@ fn main() {
 }
 
 fn setup(mut commands: Commands) {
-
     commands.spawn_prefab("sprite.prefab");
     commands.spawn_bundle(OrthographicCameraBundle::new_2d());
 }

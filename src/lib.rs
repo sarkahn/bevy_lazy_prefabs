@@ -1,7 +1,5 @@
-mod bundle;
 mod commands;
 mod dynamic_cast;
-mod material;
 mod parse;
 mod prefab;
 mod processor;
@@ -10,9 +8,6 @@ mod registry;
 use bevy::prelude::*;
 
 pub use commands::SpawnPrefabCommands;
-pub use material::AddMaterialLoader;
-pub use material::PrefabMaterial;
-pub use material::COLOR_MATERIAL_LOADER_KEY;
 
 pub use registry::PrefabRegistry;
 
@@ -29,14 +24,9 @@ pub mod plugins {
     use bevy::{prelude::*, render::render_graph::base::MainPass};
 
     use crate::{
-        // material::{
-        //     PrefabColorMaterialLoader,
-        //     AddMaterialLoader,
-        //     ColorMaterialProcessor
-        // },
-        bundle::SpriteBundleLoader,
         processor::{
-            ColorMaterialProcessor, OrthographicCameraBundleProcessor, SpriteBundleProcessor, load_color_material,
+            load_color_material, ColorMaterialProcessor, OrthographicCameraBundleProcessor,
+            SpriteBundleProcessor,
         },
         registry::PrefabRegisterProcessor,
         PrefabRegistry,
@@ -93,13 +83,10 @@ pub mod plugins {
             //reg.register_type::<TextureAtlasSprite>();
             reg.register_type::<Handle<TextureAtlas>>();
 
-            reg.add_bundle_loader_t::<SpriteBundleLoader>();
-
             //reg.register_processor::<ColorMaterialProcessor>();
 
             //app.add_prefab_material_loader::<PrefabColorMaterialLoader, ColorMaterial>();
             app.init_prefab_processor::<ColorMaterialProcessor>();
-
             app.init_prefab_processor::<OrthographicCameraBundleProcessor>();
             app.init_prefab_processor::<SpriteBundleProcessor>();
             app.add_system(load_color_material.system());

@@ -6,14 +6,10 @@ use bevy::{
     prelude::*,
     reflect::{DynamicList, DynamicStruct, DynamicTuple, DynamicTupleStruct, Reflect, ReflectRef},
 };
-use pest::{
-    error::Error,
-    iterators::{Pair, Pairs},
-    Parser,
-};
+use pest::{error::Error, iterators::Pair, Parser};
 use pest_derive::*;
 
-use crate::{bundle::PrefabBundle, dynamic_cast::*, registry::TypeInfo, PrefabMaterial};
+use crate::{dynamic_cast::*, registry::TypeInfo};
 use crate::{prefab::*, registry::PrefabRegistry};
 
 #[derive(Parser)]
@@ -46,39 +42,25 @@ pub fn parse_prefab(input: &str, registry: &mut PrefabRegistry) -> Result<Prefab
         Err(e) => return Err(LoadPrefabError::PestParseError(e)),
     };
 
-   // println!("PARSING PREFAB");
-
     let mut prefab_name = None;
     let mut components = Vec::new();
-    let mut bundles = None;
-    let mut material = None;
     let mut processors = None;
 
-    // Prefab fields
     for field in parsed {
         match field.as_rule() {
             Rule::prefab_name => {
                 prefab_name = Some(field.as_str().to_string());
             }
-            // Type Name, Components
             Rule::component => {
                 //println!("Parsing material {}", field.as_str());
                 let comp = parse_component(field, registry)?;
                 components.push(comp);
             }
-            // Rule::bundle => {
-            //     //println!("Parsing bundle");
-            //     let bundles = bundles.get_or_insert(Vec::new());
-
-            //     let bundle = parse_bundle(field, registry)?;
-
-            //     bundles.push(bundle);
-            // },
             Rule::processor => {
                 let processor = parse_processor(field)?;
                 let processors = processors.get_or_insert(Vec::new());
                 processors.push(processor);
-            },
+            }
             _ => {
                 let str = format!("{:#?}", field.as_rule());
                 return Err(LoadPrefabError::UnhandledPrefabFieldRule(str));
@@ -86,7 +68,7 @@ pub fn parse_prefab(input: &str, registry: &mut PrefabRegistry) -> Result<Prefab
         }
     }
 
-    Ok(Prefab::new(prefab_name, components, bundles, material, processors))
+    Ok(Prefab::new(prefab_name, components, processors))
 }
 
 fn parse_component(
@@ -109,7 +91,7 @@ fn parse_component(
             Rule::field => {
                 let field = parse_field(field)?;
                 fields.push(field);
-            },
+            }
             _ => {
                 let str = format!("{:#?}", field.as_rule());
                 return Err(LoadPrefabError::UnhandledPrefabFieldRule(str));
@@ -128,7 +110,7 @@ fn parse_component(
     Ok(PrefabComponent::new(type_name, root))
 }
 
-fn parse_field(mut field: Pair<Rule>) -> Result<ReflectField, LoadPrefabError> {
+fn parse_field(field: Pair<Rule>) -> Result<ReflectField, LoadPrefabError> {
     let mut field = field.into_inner();
     //println!("FIELD CONTENT: {} ", field.as_str());
     let field_name = field.next().unwrap().as_str();
@@ -270,78 +252,7 @@ fn parse_string(pair: Pair<Rule>) -> String {
     str[1..str.len().saturating_sub(1)].to_string()
 }
 
-fn parse_bundle(
-    pair: Pair<Rule>,
-    _registry: &mut PrefabRegistry,
-) -> Result<PrefabBundle, LoadPrefabError> {
-    let mut pair = pair.into_inner();
-
-    // BundleName
-    let bundle_type_name = pair.next().unwrap().as_str();
-
-    Ok(PrefabBundle::new(bundle_type_name, None))
-}
-
-fn parse_material(pair: Pair<Rule>) -> Result<PrefabMaterial, LoadPrefabError> {
-    let mut pairs = pair.into_inner();
-
-    // Type name = as_str()
-    pairs.next().unwrap();
-
-    let pairs = pairs.next();
-
-    let mut texture_path = None;
-    let mut loader_key = None;
-    let mut properties = None;
-
-    if let Some(pairs) = pairs {
-        for field in pairs.into_inner() {
-            match field.as_rule() {
-                Rule::material_texture_path => {
-                    let field = field.into_inner().next().unwrap();
-                    texture_path = Some(parse_string(field));
-                }
-                Rule::material_loader_key => {
-                    let field = field.into_inner().next().unwrap();
-                    loader_key = Some(parse_string(field))
-                }
-                Rule::field => {
-                    let mut field = field.into_inner();
-                    let name = field.next().unwrap().as_str();
-                    let val = parse_value(field.next().unwrap());
-
-                    let props = properties.get_or_insert(DynamicStruct::default());
-                    props.insert_boxed(name, val.unwrap());
-                }
-                _ => {
-                    let str = format!("{:#?}", field.as_rule());
-                    return Err(LoadPrefabError::UnhandledMaterialRule(str));
-                }
-            }
-        }
-    }
-
-    if texture_path.is_none() {
-        return Err(LoadPrefabError::MissingMaterialField(
-            "texture_path".to_string(),
-        ));
-    }
-
-    if loader_key.is_none() {
-        return Err(LoadPrefabError::MissingMaterialField(
-            "loader_key".to_string(),
-        ));
-    }
-
-    Ok(PrefabMaterial::new(
-        texture_path.unwrap().as_str(),
-        loader_key.unwrap().as_str(),
-        properties,
-    ))
-}
-
-fn parse_processor(pair: Pair<Rule>) -> Result<PrefabProcessorData,LoadPrefabError>
-{
+fn parse_processor(pair: Pair<Rule>) -> Result<PrefabProcessorData, LoadPrefabError> {
     let mut pairs = pair.into_inner();
     let key = pairs.next().unwrap().as_str();
 
@@ -349,15 +260,12 @@ fn parse_processor(pair: Pair<Rule>) -> Result<PrefabProcessorData,LoadPrefabErr
 
     for field in pairs {
         let field = parse_field(field)?;
-        
+
         let properties = properties.get_or_insert(DynamicStruct::default());
         properties.insert_boxed(field.name.as_str(), field.value);
     }
 
-    Ok(PrefabProcessorData::new(
-        key,
-        properties
-    ))
+    Ok(PrefabProcessorData::new(key, properties))
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -395,7 +303,7 @@ mod test {
         parse::{parse_component, parse_value, PrefabParser, Rule},
     };
 
-    use super::{parse_material, parse_processor, parse_field};
+    use super::{parse_field, parse_processor, parse_string};
 
     #[test]
     fn char_parse() {
@@ -475,68 +383,14 @@ mod test {
         i: i32,
     }
 
-    // #[test]
-    // fn prefab_bundle_parse() {
-    //     let mut reg = PrefabRegistry::default();
+    #[test]
+    fn string_parse() {
+        let input = "\"Hello\"";
+        let mut parsed = PrefabParser::parse(Rule::string, input).unwrap();
+        let str = parse_string(parsed.next().unwrap());
 
-    //     reg.register_type::<TestStruct>();
-
-    //     let input = "WithBundle ( bundle!(SpriteBundle), TestStruct )";
-    //     let prefab = parse_prefab(input, &mut reg).unwrap();
-
-    //     assert!(prefab.bundles().is_some());
-    //     let bundles = prefab.bundles().unwrap();
-
-    //     assert_eq!(bundles[0].name(), "SpriteBundle");
-    // }
-
-    // fn bundle_with_fields_parse() {
-    //     let input = "bundle!(SpriteBundle {
-    //         Handle<ColorMaterial> {
-    //             color = Color::RED,
-    //             texture_path = \"alien.png\"
-    //             loader_key = \"ColorMaterial\"
-    //         }
-    //     })";
-
-    //     let mut registry = PrefabRegistry::default();
-
-    //     let mut parse = PrefabParser::parse(Rule::bundle, input).unwrap();
-    //     let parse = parse_bundle(parse.next().unwrap(), &mut registry).unwrap();
-
-    //     assert!(parse.components().is_some());
-
-    //     let components = parse.components().unwrap();
-    //     assert_eq!(1, components.len());
-
-    //     let comp = &components[0];
-
-    //     //assert_eq!(Color::RED, parse.properties().unwrap().get::<Color>("color"));
-    // }
-
-    // #[test]
-    // fn material_parse() {
-    //     let input = "Handle<ColorMaterial> {
-    //         texture_path: \"alien.png\",
-    //         loader_key: \"ColorMaterial\",
-    //         color: Color::BLUE,
-    //     }";
-
-    //     let parsed = PrefabParser::parse(Rule::material, input)
-    //         .unwrap()
-    //         .next()
-    //         .unwrap();
-    //     let res = parse_material(parsed).unwrap();
-
-    //     assert_eq!("alien.png", res.texture_path());
-    //     assert_eq!("ColorMaterial", res.loader_key());
-
-    //     assert!(res.properties().is_some());
-
-    //     let col = res.properties().unwrap().get::<Color>("color");
-
-    //     assert_eq!(Color::BLUE, *col);
-    // }
+        assert_eq!("Hello", str);
+    }
 
     #[test]
     fn processor_parse() {

@@ -1,8 +1,9 @@
-use bevy::{prelude::*, reflect::{TypeUuid, DynamicStruct}};
+use bevy::{
+    prelude::*,
+    reflect::{DynamicStruct, TypeUuid},
+};
 
 use derivative::*;
-
-use crate::{bundle::PrefabBundle, PrefabMaterial};
 
 #[derive(Derivative)]
 #[derivative(Debug)]
@@ -12,17 +13,12 @@ pub struct Prefab {
     name: Option<String>,
     components: Vec<PrefabComponent>,
     processors: Option<Vec<PrefabProcessorData>>,
-    //#[derivative(Debug="ignore")]
-    //bundles: Option<Vec<PrefabBundle>>,
-    //material: Option<PrefabMaterial>,
 }
 
 impl Prefab {
     pub fn new(
         name: Option<String>,
         components: Vec<PrefabComponent>,
-        _bundles: Option<Vec<PrefabBundle>>,
-        _assets: Option<PrefabMaterial>,
         processors: Option<Vec<PrefabProcessorData>>,
     ) -> Self {
         Prefab {
@@ -51,18 +47,6 @@ impl Prefab {
     pub fn processors(&self) -> Option<&Vec<PrefabProcessorData>> {
         self.processors.as_ref()
     }
-
-    // pub fn material(&self) -> Option<&PrefabMaterial> {
-    //     self.material.as_ref()
-    // }
-
-    // pub fn bundles(&self) -> Option<&Vec<PrefabBundle>> {
-    //     self.bundles.as_ref()
-    // }
-
-    // pub fn take_material(&mut self) -> PrefabMaterial {
-    //     self.material.take().unwrap()
-    // }
 }
 
 /// A name/value pair representing a field on a type
@@ -114,18 +98,16 @@ impl PrefabComponent {
     }
 }
 
-
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct PrefabProcessorData {
     key: String,
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     properties: Option<DynamicStruct>,
 }
 
 impl PrefabProcessorData {
-    pub fn new(key: &str, properties: Option<DynamicStruct>) -> Self 
-    {
+    pub fn new(key: &str, properties: Option<DynamicStruct>) -> Self {
         Self {
             key: key.to_string(),
             properties,
