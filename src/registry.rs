@@ -1,38 +1,22 @@
+use crate::bundle::PrefabBundleLoader;
 use crate::parse::{parse_prefab, LoadPrefabError};
-use crate::prefab::Prefab;
-use bevy::prelude::ReflectComponent;
-use bevy::reflect::{ReflectRef, TypeRegistration};
+use crate::prefab::{Prefab};
+use bevy::ecs::world::EntityMut;
+use bevy::prelude::{ReflectComponent, Bundle, AppBuilder};
+use bevy::reflect::{ReflectRef, TypeRegistration, TypeRegistryInternal};
 use std::fs;
-use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use bevy::{
     reflect::{GetTypeRegistration, Reflect},
     utils::HashMap,
 };
 
-#[derive(Default, Clone)]
-pub struct PrefabRegistryArc {
-    internal: Arc<RwLock<PrefabRegistry>>,
-}
-
-impl PrefabRegistryArc {
-    pub fn read(&self) -> RwLockReadGuard<'_, PrefabRegistry> {
-        self.internal.read().unwrap()
-    }
-
-    pub fn write(&self) -> RwLockWriteGuard<'_, PrefabRegistry> {
-        self.internal.write().unwrap()
-    }
-
-    pub fn register_type<T: Reflect + Default + GetTypeRegistration>(&mut self) {
-        self.internal.write().unwrap().register_type::<T>();
-    }
-}
-
 #[derive(Default)]
 pub struct PrefabRegistry {
     prefab_map: HashMap<String, Prefab>,
     type_info_map: HashMap<String, TypeInfo>,
+    //bundle_map: HashMap<String, Box<dyn FnMut(&mut EntityMut) + Send + Sync>>,
+    bundle_map: HashMap<String, Box<dyn PrefabBundleLoader + Send + Sync>>,
 }
 
 impl PrefabRegistry {
@@ -90,6 +74,45 @@ impl PrefabRegistry {
             None => None,
         }
     }
+
+    pub fn add_bundle_loader(&mut self, loader: Box<dyn PrefabBundleLoader + Send + Sync>) {
+        self.bundle_map.insert(loader.key().to_string(), loader);
+    }
+
+    pub fn get_bundle_loader(&self, name: &str) -> &dyn PrefabBundleLoader {
+        &**self.bundle_map.get(name).unwrap()
+    }
+
+
+    // pub fn add_bundle_loader<T: Bundle>(&mut self, 
+    //     name: &str,
+    //     init_func: fn() -> T  
+    // ) {
+    //     let func = move |e: &mut EntityMut| {
+    //         e.insert_bundle(init_func());
+    //     };
+
+    //     self.bundle_map.insert(name.to_string(), Box::new(func));
+    // }
+
+    // pub fn get_bundle_loader(&self, name: &str) -> 
+    // Option<
+    //     &mut Box<dyn FnMut(&mut EntityMut) + Send + Sync + 'static>
+    // > {
+    //     self.bundle_map.get_mut(name)
+    // }
+}
+
+pub trait PrefabRegisterType {
+    fn prefab_register_type<T: Reflect + Default + GetTypeRegistration>(&mut self);
+}
+
+impl PrefabRegisterType for AppBuilder {
+    fn prefab_register_type<T: Reflect + Default + GetTypeRegistration>(&mut self) {
+        let world = self.world_mut();
+        let mut reg = world.get_resource_mut::<PrefabRegistry>().unwrap();
+        reg.register_type::<T>();
+    }
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -127,7 +150,7 @@ mod test {
     use super::PrefabRegistry;
     use crate::dynamic_cast::*;
     use bevy::{
-        reflect::{DynamicStruct, Reflect}, prelude::*, utils::HashMap,
+        reflect::{DynamicStruct, Reflect},
     };
 
     #[derive(Reflect, Default)]
@@ -153,40 +176,6 @@ mod test {
         let compb = compb.cast_ref::<DynamicStruct>();
 
         assert_eq!(35, *compb.get::<i32>("x"));
-        let mut a = Handle::<Mesh>::default();
-        a.init();
     }
 
-    struct Map {
-        map: HashMap<String, Box<dyn FnMut(&mut Box<dyn Reflect>)>>,
-    }
-
-    impl Map {
-        fn insert(&mut self) {
-            let func = |mesh: &mut Box<dyn Reflect>| {
-                let mesh = mesh.downcast_ref::<Handle<Mesh>>().unwrap();
-            };
-            let func = Box::new(func);
-            self.map.insert("Hi".to_string(), func);
-        }
-    }
-
-    #[test]
-    fn box_func() {
-        let mut map = HashMap::default();
-
-        map.insert("Hello", |mesh: &Box<dyn Reflect>| {
-            let mesh = mesh.downcast_ref::<Handle<Mesh>>();
-        });
-
-    }
-    trait ComponentInitializer {
-        fn init(&mut self);
-    }
-
-    impl ComponentInitializer for Handle<Mesh> {
-        fn init(&mut self) {
-            
-        }
-    }
 }

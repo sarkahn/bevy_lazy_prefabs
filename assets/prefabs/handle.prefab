@@ -1,0 +1,9 @@
+HandleTest (
+    bundle!(SpriteBundle {
+        Handle<ColorMaterial> {
+            texture_path: "alien.png",
+            loader_key: "ColorMaterial",
+            color: Color::BLUE,
+        }
+    })
+)

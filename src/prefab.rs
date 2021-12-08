@@ -3,16 +3,30 @@ use bevy::{
     reflect::{TypeUuid},
 };
 
-#[derive(Debug, TypeUuid)]
+use derivative::*;
+
+use crate::{PrefabMaterial, bundle::PrefabBundle};
+
+#[derive(Derivative)]
+#[derivative(Debug)]
+#[derive(TypeUuid)]
 #[uuid = "289f0b4a-2b90-49d2-af63-61ad2fec867c"]
 pub struct Prefab {
     name: Option<String>,
     components: Vec<PrefabComponent>,
+    #[derivative(Debug="ignore")]
+    bundles: Option<Vec<PrefabBundle>>,
+    material: Option<PrefabMaterial>,
 }
 
 impl Prefab {
-    pub fn new(name: Option<String>, components: Vec<PrefabComponent>) -> Self {
-        Prefab { name, components }
+    pub fn new(
+        name: Option<String>, 
+        components: Vec<PrefabComponent>, 
+        bundles: Option<Vec<PrefabBundle>>,
+        assets: Option<PrefabMaterial>,
+    ) -> Self {
+        Prefab { name, components, bundles, material: assets }
     }
 
     pub fn name(&self) -> Option<&String> {
@@ -29,6 +43,18 @@ impl Prefab {
 
     pub fn component_from_index(&self, index: usize) -> &PrefabComponent {
         &self.components[index]
+    }
+
+    pub fn material(&self) -> Option<&PrefabMaterial> {
+        self.material.as_ref()
+    }
+
+    pub fn bundles(&self) -> Option<&Vec<PrefabBundle>> {
+        self.bundles.as_ref()
+    }
+
+    pub fn take_material(&mut self) -> PrefabMaterial {
+        self.material.take().unwrap()
     }
 }
 

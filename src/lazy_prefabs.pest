@@ -16,7 +16,7 @@ vec3 = { "Vec3" ~ "{" ~ fields ~ "}" }
 
 string_inner = _{ (!"\"" ~ (LETTER | NUMBER | SYMBOL | PUNCTUATION))* }
 inner_silent = @{ string_inner }
-string = ${ "\"" ~ inner_silent ~ "\"" }
+string = ${ "\"" ~ string_inner ~ "\"" }
 array = {
     "[" ~ "]" |
     "[" ~ value ~ ("," ~ value)* ~ ","? ~ "]"
@@ -27,16 +27,42 @@ id_letter = { LETTER | "_" }
 type_name = @{ id_letter ~ (id_letter | NUMBER )* }
 field_name = @{ id_letter ~ (id_letter | NUMBER )* }
 prefab_name = @{ id_letter ~ (id_letter | NUMBER )* }
+material_type_name = @{ id_letter ~ (id_letter | NUMBER )* }
 
-value = _{ vec2 | vec3 | float | int | char | string | range | array | component }
+color = ${ color_id ~ color_value }
+color_id = _{ "Color::" }
+color_value = { "BLUE" | "RED" | "GREEN" | "YELLOW" | "PINK" } 
+
+value = _{ vec2 | vec3 | float | int | color | char | string | range | array | material | component }
 
 field = { field_name ~ ":" ~ value }
 fields = _{ field ~ ("," ~ field)* ~ ","? }
 
-component = {  type_name ~ component_fields* }
-component_fields = _{ "{" ~ ((field | component) ~ ","? )* ~ "}" } 
+material = { "Handle<" ~ material_type_name ~ ">" ~ material_fields? }
+material_field = _{ (material_texture_path | material_loader_key | field ) }
+material_fields = { "{" ~ 
+	material_field ~ ("," ~ material_field)* ~ ","? ~ "}" 
+}
+material_texture_path = { "texture_path" ~ ":" ~ string }
+material_loader_key = { "loader_key" ~ ":" ~ string }
+
+component = { (type_name ~ component_fields*) }
+component_field = _{ (material | field | component) }
+component_fields = _{ "{" ~ 
+	component_field ~ ("," ~ component_field)* ~ ","? ~ "}" 
+    } 
 components = _{ component ~ ("," ~ component)* ~ ","? }
 
-prefab = _{ prefab_name? ~ "(" ~ components ~ ")" }
+prefab_field = _{ (material | bundle | component ) }
+prefab_fields = _{ prefab_field ~ ("," ~ prefab_field)* ~ ","? }
+
+bundle = { "bundle!(" ~ type_name ~ ("{" ~ bundle_fields ~ "}" ~ ")")? }
+bundle_field = _{ (material | component ) }
+bundle_fields = { 
+	bundle_field ~ ("," ~ bundle_field)* ~ ","?
+}
+bundles = _{  bundle ~ ("," ~ bundle)* ~ ","? }
+
+prefab = _{ prefab_name? ~ "(" ~ prefab_fields ~ ")" }
  
 WHITESPACE = _{ " " | "\t" | "\r" | "\n" }

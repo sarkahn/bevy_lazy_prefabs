@@ -439,6 +439,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bevy",
+ "derivative",
  "pest",
  "pest_derive",
  "serde",
