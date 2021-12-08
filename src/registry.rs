@@ -1,9 +1,10 @@
 use crate::bundle::PrefabBundleLoader;
-use crate::parse::{parse_prefab, LoadPrefabError};
-use crate::prefab::{Prefab};
-use bevy::ecs::world::EntityMut;
-use bevy::prelude::{ReflectComponent, Bundle, AppBuilder};
-use bevy::reflect::{ReflectRef, TypeRegistration, TypeRegistryInternal};
+use crate::parse::{parse_prefab, LoadPrefabError, ReflectType};
+use crate::prefab::Prefab;
+use crate::processor::PrefabProcessor;
+
+use bevy::prelude::{AppBuilder, ReflectComponent};
+use bevy::reflect::TypeRegistration;
 use std::fs;
 
 use bevy::{
@@ -17,11 +18,12 @@ pub struct PrefabRegistry {
     type_info_map: HashMap<String, TypeInfo>,
     //bundle_map: HashMap<String, Box<dyn FnMut(&mut EntityMut) + Send + Sync>>,
     bundle_map: HashMap<String, Box<dyn PrefabBundleLoader + Send + Sync>>,
+    processor_map: HashMap<String, Box<dyn PrefabProcessor + Send + Sync>>,
 }
 
 impl PrefabRegistry {
     /// Register a new type of prefab.
-    pub fn register_type<T: Reflect + Default + GetTypeRegistration>(&mut self) {
+    pub fn register_type<T: Reflect + Default + GetTypeRegistration>(&mut self) -> &Self {
         let instance = T::default();
         let registration = T::get_type_registration();
 
@@ -32,13 +34,14 @@ impl PrefabRegistry {
         };
 
         self.type_info_map.insert(info.type_name.to_string(), info);
+        self
     }
 
     pub fn type_info(&self, type_name: &str) -> Option<&TypeInfo> {
         //println!("TYPENAME {}", type_name);
         self.type_info_map.get(type_name)
     }
-    
+
     pub fn get_prefab(&self, prefab_name: &str) -> Option<&Prefab> {
         self.prefab_map.get(prefab_name)
     }
@@ -61,7 +64,7 @@ impl PrefabRegistry {
             Err(e) => Err(e),
         }
     }
-    
+
     pub fn reflect_component(&self, type_name: &str) -> Option<&ReflectComponent> {
         let registration = self.registration(type_name)?;
         registration.data::<ReflectComponent>()
@@ -79,28 +82,34 @@ impl PrefabRegistry {
         self.bundle_map.insert(loader.key().to_string(), loader);
     }
 
-    pub fn get_bundle_loader(&self, name: &str) -> &dyn PrefabBundleLoader {
-        &**self.bundle_map.get(name).unwrap()
+    pub fn add_bundle_loader_t<T: PrefabBundleLoader + Default + Send + Sync + 'static>(&mut self) {
+        let t = T::default();
+        self.add_bundle_loader(Box::new(t));
     }
 
+    pub fn get_bundle_loader(&self, name: &str) -> Option<&dyn PrefabBundleLoader> {
+        if let Some(loader) = self.bundle_map.get(name) {
+            return Some(&**loader);
+        }
+        None
+    }
 
-    // pub fn add_bundle_loader<T: Bundle>(&mut self, 
-    //     name: &str,
-    //     init_func: fn() -> T  
-    // ) {
-    //     let func = move |e: &mut EntityMut| {
-    //         e.insert_bundle(init_func());
-    //     };
+    pub fn get_processor(&self, key: &str) -> Option<&dyn PrefabProcessor> {
+        match self.processor_map.get(key) {
+            Some(processor) => Some(&**processor),
+            None => None
+        }
+    }
 
-    //     self.bundle_map.insert(name.to_string(), Box::new(func));
-    // }
+    fn register_processor<T: PrefabProcessor + Default + Send + Sync + 'static>(&mut self) {
+        let p = T::default();
+        self.processor_map.insert(p.key().to_string(), Box::new(p));
+    }
 
-    // pub fn get_bundle_loader(&self, name: &str) -> 
-    // Option<
-    //     &mut Box<dyn FnMut(&mut EntityMut) + Send + Sync + 'static>
-    // > {
-    //     self.bundle_map.get_mut(name)
-    // }
+    fn add_processor(&mut self, processor: Box<dyn PrefabProcessor + Send + Sync + 'static>) {
+        self.processor_map
+            .insert(processor.key().to_string(), processor);
+    }
 }
 
 pub trait PrefabRegisterType {
@@ -115,26 +124,22 @@ impl PrefabRegisterType for AppBuilder {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Debug)]
-pub enum ReflectType {
-    Struct,
-    TupleStruct,
-    Tuple,
-    List,
-    Map,
-    Value,
+pub trait PrefabRegisterProcessor {
+    fn add_prefab_processor(&mut self, processor: Box<dyn PrefabProcessor + Send + Sync>);
+    fn init_prefab_processor<T: PrefabProcessor + Default + Send + Sync + 'static>(&mut self);
 }
 
-impl<'a> From<ReflectRef<'a>> for ReflectType {
-    fn from(reflect: ReflectRef) -> Self {
-        match reflect {
-            ReflectRef::Struct(_) => ReflectType::Struct,
-            ReflectRef::TupleStruct(_) => ReflectType::TupleStruct,
-            ReflectRef::Tuple(_) => ReflectType::Tuple,
-            ReflectRef::List(_) => ReflectType::List,
-            ReflectRef::Map(_) => ReflectType::Map,
-            ReflectRef::Value(_) => ReflectType::Value,
-        }
+impl PrefabRegisterProcessor for AppBuilder {
+    fn init_prefab_processor<T: PrefabProcessor + Default + Send + Sync + 'static>(&mut self) {
+        let t = T::default();
+        self.add_prefab_processor(Box::new(t));
+    }
+
+    fn add_prefab_processor(&mut self, processor: Box<dyn PrefabProcessor + Send + Sync>) {
+        processor.on_init(self);
+        let world = self.world_mut();
+        let mut reg = world.get_resource_mut::<PrefabRegistry>().unwrap();
+        reg.add_processor(processor);
     }
 }
 
@@ -149,9 +154,7 @@ pub struct TypeInfo {
 mod test {
     use super::PrefabRegistry;
     use crate::dynamic_cast::*;
-    use bevy::{
-        reflect::{DynamicStruct, Reflect},
-    };
+    use bevy::reflect::{DynamicStruct, Reflect};
 
     #[derive(Reflect, Default)]
     struct TestComponentA;
@@ -177,5 +180,4 @@ mod test {
 
         assert_eq!(35, *compb.get::<i32>("x"));
     }
-
 }

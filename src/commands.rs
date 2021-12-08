@@ -1,8 +1,6 @@
 use bevy::{ecs::system::Command, prelude::*};
 
-use crate::{ 
-    registry::PrefabRegistry
-};
+use crate::registry::PrefabRegistry;
 
 struct SpawnPrefab {
     prefab_name: String,
@@ -10,7 +8,7 @@ struct SpawnPrefab {
 
 impl Command for SpawnPrefab {
     fn write(self: Box<Self>, world: &mut World) {
-
+        println!("SPAWNING PREFAB");
         world.resource_scope(|world, mut reg: Mut<PrefabRegistry>| {
             // Load the prefab if it's not already loaded
             reg.load(self.prefab_name.as_str()).unwrap();
@@ -18,25 +16,21 @@ impl Command for SpawnPrefab {
             let prefab = reg.get_prefab(self.prefab_name.as_str()).unwrap();
 
             let mut entity = world.spawn();
-
-            // First insert bundles
-            if let Some(bundles) = prefab.bundles() {
-                for bundle in bundles {
-                    reg.get_bundle_loader(bundle.name()).add_bundle(&mut entity);
+            
+            if let Some(processors) = prefab.processors() {
+                for data in processors {
+                    let processor = reg.get_processor(data.key()).unwrap_or_else(||
+                        panic!("Error spawning prefab, the processor {} hasn't been registered", data.key())
+                    );
+                    processor.process_prefab(data.properties(), &mut entity);
                 }
-            }
-
-            // Then our material data
-            if let Some(mat) = prefab.material() {
-                entity.insert(mat.clone());
             }
 
             let entity = entity.id();
 
-            // Finally the individual components
             for component in prefab.components() {
                 let reflect = reg.reflect_component(component.name()).unwrap();
-        
+
                 reflect.add_component(world, entity, component.root());
             }
         });
@@ -44,7 +38,7 @@ impl Command for SpawnPrefab {
 }
 
 pub trait SpawnPrefabCommands {
-    /// Spawn a prefab from a ".prefab" file. 
+    /// Spawn a prefab from a ".prefab" file.
     fn spawn_prefab(&mut self, prefab_name: &str);
 }
 

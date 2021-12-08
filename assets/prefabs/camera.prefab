@@ -1,1 +1,3 @@
-Camera (bundle!(OrthographicCameraBundle))
+Camera (
+    processor!(OrthographicCameraBundle)
+    )

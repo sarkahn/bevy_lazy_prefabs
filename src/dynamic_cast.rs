@@ -4,7 +4,7 @@ use thiserror::Error;
 pub trait DynamicCast: Reflect {
     /// Downcast to `&T` and unwrap immediately. Will panic if
     /// given the wrong type.
-    
+
     fn cast_ref<T: Reflect>(&self) -> &T;
     /// Downcast to `&mut T` and unwrap immediately. Will panic if given
     /// the wrong type.

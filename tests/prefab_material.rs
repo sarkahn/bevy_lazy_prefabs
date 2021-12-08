@@ -1,8 +1,3 @@
-use bevy_lazy_prefabs::{*, plugins::LazyPrefabsMinimalPlugin};
-use bevy::prelude::*;
-use bevy::asset::AssetPlugin;
-use bevy::sprite::SpritePlugin;
-
 // Can't work - need access to textures at a minimum, textures are in bevy render, bevy render requires a window
 // to render to
 
@@ -24,4 +19,3 @@ use bevy::sprite::SpritePlugin;
 //     mut commands: Commands,
 // ) {
 // }
-

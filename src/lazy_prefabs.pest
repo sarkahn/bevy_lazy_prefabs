@@ -41,28 +41,35 @@ fields = _{ field ~ ("," ~ field)* ~ ","? }
 material = { "Handle<" ~ material_type_name ~ ">" ~ material_fields? }
 material_field = _{ (material_texture_path | material_loader_key | field ) }
 material_fields = { "{" ~ 
-	material_field ~ ("," ~ material_field)* ~ ","? ~ "}" 
+	material_field ~ ("," ~ material_field)* ~ ","? ~ 
+    "}" 
 }
 material_texture_path = { "texture_path" ~ ":" ~ string }
 material_loader_key = { "loader_key" ~ ":" ~ string }
 
 component = { (type_name ~ component_fields*) }
-component_field = _{ (material | field | component) }
+component_field = _{ (field | component) }
 component_fields = _{ "{" ~ 
-	component_field ~ ("," ~ component_field)* ~ ","? ~ "}" 
+	component_field ~ ("," ~ component_field)* ~ ","? ~ 
+    "}" 
     } 
 components = _{ component ~ ("," ~ component)* ~ ","? }
 
-prefab_field = _{ (material | bundle | component ) }
-prefab_fields = _{ prefab_field ~ ("," ~ prefab_field)* ~ ","? }
 
-bundle = { "bundle!(" ~ type_name ~ ("{" ~ bundle_fields ~ "}" ~ ")")? }
-bundle_field = _{ (material | component ) }
+bundle = { "bundle!(" ~ type_name ~ bundle_fields? ~ ")" }
+bundle_field = _{ (material | component) }
 bundle_fields = { 
-	bundle_field ~ ("," ~ bundle_field)* ~ ","?
+    "{" ~ 
+	bundle_field ~ ("," ~ bundle_field)* ~ ","? ~ 
+    "}"
 }
 bundles = _{  bundle ~ ("," ~ bundle)* ~ ","? }
 
 prefab = _{ prefab_name? ~ "(" ~ prefab_fields ~ ")" }
+prefab_field = _{ (processor | component ) }
+prefab_fields = _{ prefab_field ~ ("," ~ prefab_field)* ~ ","? }
+
+processor = { "processor!(" ~ type_name  ~ properties* ~ ")" }
+properties = _{ "{" ~ fields ~ "}" }
  
 WHITESPACE = _{ " " | "\t" | "\r" | "\n" }

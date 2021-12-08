@@ -1,11 +1,7 @@
 use bevy::prelude::*;
 use bevy_lazy_prefabs::*;
 
-
-fn setup(
-    mut registry: ResMut<PrefabRegistry>,
-    mut commands: Commands
-) {
+fn setup(mut registry: ResMut<PrefabRegistry>, mut commands: Commands) {
     registry.register_type::<Transform>();
     registry.register_type::<Vec3>();
 
@@ -16,13 +12,13 @@ fn setup(
 fn query(
     asset_server: Res<AssetServer>,
     mut materials: ResMut<Assets<ColorMaterial>>,
-    input: Res<Input<KeyCode>>, 
+    input: Res<Input<KeyCode>>,
     mut q: Query<&mut Handle<ColorMaterial>>,
 ) {
     let tex = materials.add(asset_server.load("icon.png").into());
     if input.just_pressed(KeyCode::Space) {
         let mut mat = q.single_mut().unwrap();
-        *mat = tex.clone();
+        *mat = tex;
     }
 }
 
