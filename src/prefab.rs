@@ -1,15 +1,13 @@
 use bevy::{
     prelude::*,
-    reflect::{DynamicStruct, TypeUuid},
+    reflect::DynamicStruct,
 };
 
 use derivative::*;
 
 #[derive(Derivative)]
 #[derivative(Debug)]
-#[derive(TypeUuid)]
-#[uuid = "289f0b4a-2b90-49d2-af63-61ad2fec867c"]
-pub struct Prefab {
+pub(crate) struct Prefab {
     name: Option<String>,
     components: Vec<PrefabComponent>,
     processors: Option<Vec<PrefabProcessorData>>,
@@ -23,25 +21,13 @@ impl Prefab {
     ) -> Self {
         Prefab {
             name,
-            components, /*bundles, material: assets*/
+            components,
             processors,
         }
     }
 
-    pub fn name(&self) -> Option<&String> {
-        self.name.as_ref()
-    }
-
-    pub fn component(&self, name: &str) -> Option<&PrefabComponent> {
-        self.components.iter().find(|c| c.name == name)
-    }
-
     pub fn components(&self) -> &Vec<PrefabComponent> {
         &self.components
-    }
-
-    pub fn component_from_index(&self, index: usize) -> &PrefabComponent {
-        &self.components[index]
     }
 
     pub fn processors(&self) -> Option<&Vec<PrefabProcessorData>> {
@@ -51,7 +37,7 @@ impl Prefab {
 
 /// A name/value pair representing a field on a type
 #[derive(Debug)]
-pub struct ReflectField {
+pub(crate) struct ReflectField {
     pub name: String,
     pub value: Box<dyn Reflect>,
 }
@@ -63,7 +49,7 @@ impl From<ReflectField> for (String, Box<dyn Reflect>) {
 }
 
 #[derive(Debug)]
-pub struct PrefabComponent {
+pub(crate) struct PrefabComponent {
     name: String,
     dynamic_value: Box<dyn Reflect>,
 }
@@ -100,7 +86,7 @@ impl PrefabComponent {
 
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub struct PrefabProcessorData {
+pub(crate) struct PrefabProcessorData {
     key: String,
     #[derivative(Debug = "ignore")]
     properties: Option<DynamicStruct>,

@@ -1,7 +1,5 @@
 use std::ops::Range;
-
 use thiserror::Error;
-
 use bevy::{
     prelude::*,
     reflect::{DynamicList, DynamicStruct, DynamicTuple, DynamicTupleStruct, Reflect, ReflectRef},
@@ -36,7 +34,7 @@ pub enum LoadPrefabError {
     ValueParseError(String, String),
 }
 
-pub fn parse_prefab(input: &str, registry: &mut PrefabRegistry) -> Result<Prefab, LoadPrefabError> {
+pub(crate) fn parse_prefab(input: &str, registry: &mut PrefabRegistry) -> Result<Prefab, LoadPrefabError> {
     let parsed = match PrefabParser::parse(Rule::prefab, input) {
         Ok(parsed) => parsed,
         Err(e) => return Err(LoadPrefabError::PestParseError(e)),
@@ -52,7 +50,6 @@ pub fn parse_prefab(input: &str, registry: &mut PrefabRegistry) -> Result<Prefab
                 prefab_name = Some(field.as_str().to_string());
             }
             Rule::component => {
-                //println!("Parsing material {}", field.as_str());
                 let comp = parse_component(field, registry)?;
                 components.push(comp);
             }
@@ -79,7 +76,6 @@ fn parse_component(
 
     let mut pairs = pair.into_inner();
     let type_name = pairs.next().unwrap().as_str();
-    //println!("Type name {}", type_name);
 
     // Prefab fields
     for field in pairs {
@@ -112,7 +108,6 @@ fn parse_component(
 
 fn parse_field(field: Pair<Rule>) -> Result<ReflectField, LoadPrefabError> {
     let mut field = field.into_inner();
-    //println!("FIELD CONTENT: {} ", field.as_str());
     let field_name = field.next().unwrap().as_str();
     let value = parse_value(field.next().unwrap())?;
 
@@ -174,10 +169,8 @@ fn parse_value(pair: Pair<Rule>) -> Result<Box<dyn Reflect>, LoadPrefabError> {
             Ok(Box::new(ch as u8))
         }
         Rule::string => {
-            let str = pair.as_str();
-            //println!("Parsing string {}", str);
-            let str = &str[1..str.len().saturating_sub(1)];
-            Ok(Box::new(str.to_string()))
+            let str = parse_string(pair);
+            Ok(Box::new(str))
         }
         Rule::array => {
             let mut list = DynamicList::default();
@@ -269,7 +262,7 @@ fn parse_processor(pair: Pair<Rule>) -> Result<PrefabProcessorData, LoadPrefabEr
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub enum ReflectType {
+pub(crate) enum ReflectType {
     Struct,
     TupleStruct,
     Tuple,

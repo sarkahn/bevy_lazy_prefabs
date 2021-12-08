@@ -10,7 +10,7 @@ impl Command for SpawnPrefab {
     fn write(self: Box<Self>, world: &mut World) {
         world.resource_scope(|world, mut reg: Mut<PrefabRegistry>| {
             // Load the prefab if it's not already loaded
-            reg.load(self.prefab_name.as_str()).unwrap();
+            reg.try_load(self.prefab_name.as_str()).unwrap();
 
             let prefab = reg.get_prefab(self.prefab_name.as_str()).unwrap();
 

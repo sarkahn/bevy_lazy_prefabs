@@ -11,6 +11,7 @@ use bevy::{
     utils::HashMap,
 };
 
+/// Manages and caches various types of prefab data.
 #[derive(Default)]
 pub struct PrefabRegistry {
     prefab_map: HashMap<String, Prefab>,
@@ -19,7 +20,7 @@ pub struct PrefabRegistry {
 }
 
 impl PrefabRegistry {
-    /// Register a new type of prefab.
+    /// Register a new type that can be built from a `.prefab` file.
     pub fn register_type<T: Reflect + Default + GetTypeRegistration>(&mut self) -> &Self {
         let instance = T::default();
         let registration = T::get_type_registration();
@@ -34,20 +35,51 @@ impl PrefabRegistry {
         self
     }
 
-    pub fn type_info(&self, type_name: &str) -> Option<&TypeInfo> {
-        self.type_info_map.get(type_name)
+
+    /// Initialize a [PrefabProcessor] by type.
+    pub fn init_processor<T: PrefabProcessor + Default + Send + Sync + 'static>(&mut self) {
+        let p = T::default();
+        self.processor_map.insert(p.key().to_string(), Box::new(p));
     }
 
-    /// Retrieve a prefab from the registry if it's been `load`ed yet.
-    pub fn get_prefab(&self, prefab_name: &str) -> Option<&Prefab> {
+    /// Add a [PrefabProcessor] to the registry.
+    pub fn add_processor(&mut self, processor: Box<dyn PrefabProcessor + Send + Sync + 'static>) {
+        self.processor_map
+            .insert(processor.key().to_string(), processor);
+    }
+    
+    /// Attempts to load a prefab from disk. 
+    /// 
+    /// Prefabs are loaded from the `assets/prefabs` directory. 
+    /// If the prefab fails to load, it will return an error. If the prefab has already 
+    /// been loaded, it will do nothing. Note this will cache the parsed prefab data so 
+    /// it will stay in memory even if it's not longer used. You can use the `remove_prefab` 
+    /// function  to remove it from the registry.
+    pub fn load(&mut self, prefab_name: &str) -> Result<(),LoadPrefabError> {
+        self.try_load(prefab_name).map(|_| ())
+    }
+
+    /// Remove a prefab from the registry. It will need to be loaded from disk
+    /// again if re-loaded.
+    pub fn remove_prefab(&mut self, prefab_name: &str) {
+        self.prefab_map.remove(prefab_name);
+    }
+
+    /// Retrieve a prefab from the registry if it's been loaded yet.
+    pub(crate) fn get_prefab(&self, prefab_name: &str) -> Option<&Prefab> {
         self.prefab_map.get(prefab_name)
     }
 
+    /// Retrieve a registered [PrefabProcessor].
+    pub(crate) fn get_processor(&self, key: &str) -> Option<&dyn PrefabProcessor> {
+        match self.processor_map.get(key) {
+            Some(processor) => Some(&**processor),
+            None => None,
+        }
+    }
+
     /// Load the prefab from disk, or retrieve it if it's already been loaded.
-    /// Note this will cache the parsed prefab data so it will stay in memory even
-    /// if it's not longer used. You can use the `remove_prefab` function  to remove it
-    /// from the registry.
-    pub fn load(&mut self, prefab_name: &str) -> Result<&Prefab, LoadPrefabError> {
+    pub(crate) fn try_load(&mut self, prefab_name: &str) -> Result<&Prefab, LoadPrefabError> {
         if self.prefab_map.contains_key(prefab_name) {
             return Ok(&self.prefab_map[prefab_name]);
         }
@@ -66,15 +98,14 @@ impl PrefabRegistry {
         }
     }
 
-    /// Remove the given prefab from the registry. It will need to be loaded from disk
-    /// again if re-loaded.
-    pub fn remove_prefab(&mut self, prefab_name: &str) {
-        self.prefab_map.remove(prefab_name);
-    }
 
     pub(crate) fn reflect_component(&self, type_name: &str) -> Option<&ReflectComponent> {
         let registration = self.registration(type_name)?;
         registration.data::<ReflectComponent>()
+    }
+
+    pub(crate) fn type_info(&self, type_name: &str) -> Option<&TypeInfo> {
+        self.type_info_map.get(type_name)
     }
 
     fn registration(&self, type_name: &str) -> Option<&TypeRegistration> {
@@ -85,33 +116,15 @@ impl PrefabRegistry {
         }
     }
 
-    /// Retrieve a registered [PrefabProcessor].
-    pub fn get_processor(&self, key: &str) -> Option<&dyn PrefabProcessor> {
-        match self.processor_map.get(key) {
-            Some(processor) => Some(&**processor),
-            None => None,
-        }
-    }
 
-    /// Initialize a [PrefabProcessor] by type.
-    pub fn init_processor<T: PrefabProcessor + Default + Send + Sync + 'static>(&mut self) {
-        let p = T::default();
-        self.processor_map.insert(p.key().to_string(), Box::new(p));
-    }
-
-    /// Add a [PrefabProcessor] to the registry.
-    pub fn add_processor(&mut self, processor: Box<dyn PrefabProcessor + Send + Sync + 'static>) {
-        self.processor_map
-            .insert(processor.key().to_string(), processor);
-    }
 }
 
 pub trait PrefabRegisterType {
-    fn prefab_register_type<T: Reflect + Default + GetTypeRegistration>(&mut self);
+    fn register_prefab_type<T: Reflect + Default + GetTypeRegistration>(&mut self);
 }
 
 impl PrefabRegisterType for AppBuilder {
-    fn prefab_register_type<T: Reflect + Default + GetTypeRegistration>(&mut self) {
+    fn register_prefab_type<T: Reflect + Default + GetTypeRegistration>(&mut self) {
         let world = self.world_mut();
         let mut reg = world.get_resource_mut::<PrefabRegistry>().unwrap();
         reg.register_type::<T>();
@@ -137,7 +150,7 @@ impl PrefabRegisterProcessor for AppBuilder {
 }
 
 #[derive(Clone)]
-pub struct TypeInfo {
+pub(crate) struct TypeInfo {
     pub type_name: String,
     pub reflect_type: ReflectType,
     pub registration: TypeRegistration,
@@ -162,7 +175,7 @@ mod test {
         reg.register_type::<TestComponentA>();
         reg.register_type::<TestComponentB>();
 
-        let prefab = reg.load("test.prefab").unwrap();
+        let prefab = reg.try_load("test.prefab").unwrap();
 
         let components = prefab.components();
 
