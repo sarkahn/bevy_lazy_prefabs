@@ -28,6 +28,7 @@ type_name = @{ id_letter ~ (id_letter | NUMBER )* }
 field_name = @{ id_letter ~ (id_letter | NUMBER )* }
 prefab_name = @{ id_letter ~ (id_letter | NUMBER )* }
 material_type_name = @{ id_letter ~ (id_letter | NUMBER )* }
+file_name = @{ type_name ~ "." ~ type_name } 
 
 color = ${ color_id ~ color_value }
 color_id = _{ "Color::" }
@@ -46,11 +47,12 @@ component_fields = _{ "{" ~
     } 
 components = _{ component ~ ("," ~ component)* ~ ","? }
 
-prefab = _{ prefab_name? ~ "(" ~ prefab_fields ~ ")" }
-prefab_field = _{ (processor | component ) }
+prefab = { type_name? ~ ("{" ~ prefab_fields ~ "}") }
+prefab_field = _{ ( load | processor | component ) }
 prefab_fields = _{ prefab_field ~ ("," ~ prefab_field)* ~ ","? }
 
-processor = { "processor!(" ~ type_name  ~ properties* ~ ")" }
-properties = _{ "{" ~ fields ~ "}" }
+processor = { "processor!(" ~ type_name ~ ("{" ~ fields* ~ "}")? ~ ")" }
+ 
+load = { "load!(" ~ file_name ~ ("{" ~ components ~ "}")? ~ ")" }
  
 WHITESPACE = _{ " " | "\t" | "\r" | "\n" }

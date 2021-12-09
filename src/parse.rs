@@ -2,7 +2,7 @@ use std::ops::Range;
 use thiserror::Error;
 use bevy::{
     prelude::*,
-    reflect::{DynamicList, DynamicStruct, DynamicTuple, DynamicTupleStruct, Reflect, ReflectRef},
+    reflect::{DynamicList, DynamicStruct, DynamicTuple, DynamicTupleStruct, Reflect, ReflectRef}, asset::AssetLoader,
 };
 use pest::{error::Error, iterators::Pair, Parser};
 use pest_derive::*;
@@ -34,20 +34,27 @@ pub enum LoadPrefabError {
     ValueParseError(String, String),
 }
 
-pub(crate) fn parse_prefab(input: &str, registry: &mut PrefabRegistry) -> Result<Prefab, LoadPrefabError> {
-    let parsed = match PrefabParser::parse(Rule::prefab, input) {
+pub(crate) fn parse_prefab_string(input: &str, registry: &mut PrefabRegistry) -> Result<Prefab, LoadPrefabError> {
+    let mut parsed = match PrefabParser::parse(Rule::prefab, input) {
         Ok(parsed) => parsed,
         Err(e) => return Err(LoadPrefabError::PestParseError(e)),
     };
 
-    let mut prefab_name = None;
+    parse_prefab(parsed.next().unwrap(), registry)
+}
+
+fn parse_prefab(pair: Pair<Rule>, registry: &mut PrefabRegistry) -> Result<Prefab, LoadPrefabError> {
     let mut components = Vec::new();
     let mut processors = None;
+    let mut loaders = None;
 
-    for field in parsed {
+    let pair = pair.into_inner();
+    let mut name = None;
+
+    for field in pair {
         match field.as_rule() {
-            Rule::prefab_name => {
-                prefab_name = Some(field.as_str().to_string());
+            Rule::type_name => {
+                name = Some(field.as_str().to_string());
             }
             Rule::component => {
                 let comp = parse_component(field, registry)?;
@@ -58,6 +65,11 @@ pub(crate) fn parse_prefab(input: &str, registry: &mut PrefabRegistry) -> Result
                 let processors = processors.get_or_insert(Vec::new());
                 processors.push(processor);
             }
+            Rule::load => {
+                let load = parse_load(field, registry)?;
+                let loaders = loaders.get_or_insert(Vec::new());
+                loaders.push(load);
+            }
             _ => {
                 let str = format!("{:#?}", field.as_rule());
                 return Err(LoadPrefabError::UnhandledPrefabFieldRule(str));
@@ -65,7 +77,7 @@ pub(crate) fn parse_prefab(input: &str, registry: &mut PrefabRegistry) -> Result
         }
     }
 
-    Ok(Prefab::new(prefab_name, components, processors))
+    Ok(Prefab::new(name, components, processors, loaders))
 }
 
 fn parse_component(
@@ -261,6 +273,29 @@ fn parse_processor(pair: Pair<Rule>) -> Result<PrefabProcessorData, LoadPrefabEr
     Ok(PrefabProcessorData::new(key, properties))
 }
 
+fn parse_load(
+    pair: Pair<Rule>, 
+    registry: &mut PrefabRegistry
+) -> Result<PrefabLoad, LoadPrefabError> {
+
+    let mut pairs = pair.into_inner();
+
+    let path = pairs.next().unwrap().as_str();
+
+    // Ensure the prefab is loaded
+    registry.load(path)?;
+
+    let mut components = None;
+
+    for component in pairs {
+        let component = parse_component(component, registry)?;
+        let components = components.get_or_insert(Vec::new());
+        components.push(component);
+    }
+
+    Ok(PrefabLoad::new(path, components))
+}
+
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub(crate) enum ReflectType {
     Struct,
@@ -296,7 +331,7 @@ mod test {
         parse::{parse_component, parse_value, PrefabParser, Rule},
     };
 
-    use super::{parse_field, parse_processor, parse_string};
+    use super::{parse_field, parse_processor, parse_string, parse_prefab, parse_load};
 
     #[test]
     fn char_parse() {
@@ -413,4 +448,43 @@ mod test {
         assert_eq!("a", field.name);
         assert_eq!("hi", field.value.cast_ref::<String>());
     }
+
+    #[test]
+    fn prefab_parse() {
+        let input = "SomeName { processor!(proc), Visible, Draw }";
+        let mut parsed = PrefabParser::parse(Rule::prefab, input).unwrap();
+        let mut reg = PrefabRegistry::default();
+        reg.register_type::<Visible>();
+        reg.register_type::<Draw>();
+
+        let prefab = parse_prefab(parsed.next().unwrap(), &mut reg).unwrap();
+
+        assert_eq!(prefab.components().len(), 2);
+        assert!(prefab.components().iter().find(|c| c.name() == "Visible").is_some());
+        assert!(prefab.components().iter().find(|c| c.name() == "Draw").is_some());
+    }
+
+    
+    #[derive(Reflect, Default)]
+    struct TestComponentA;
+    #[derive(Reflect, Default)]
+    struct TestComponentB {
+        x: i32,
+    }
+    
+    #[test]
+    fn load_parse() {
+        let input = "load!(test.prefab)";
+
+        let mut reg = PrefabRegistry::default();
+        reg.register_type::<TestComponentA>();
+        reg.register_type::<TestComponentB>();
+
+        let mut parsed = PrefabParser::parse(Rule::load, input).unwrap();
+        let load = parse_load(parsed.next().unwrap(), &mut reg).unwrap(); 
+
+        assert_eq!("test.prefab", load.path());
+    }
+
+
 }

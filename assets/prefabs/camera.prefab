@@ -1,8 +1,8 @@
-Camera (
+{
     processor!(OrthographicCameraBundle),
     Transform {
         translation: Vec3 {
             x: 3.0,
         },
     },
-)
+}

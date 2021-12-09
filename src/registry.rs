@@ -1,4 +1,4 @@
-use crate::parse::{parse_prefab, LoadPrefabError, ReflectType};
+use crate::parse::{parse_prefab_string, LoadPrefabError, ReflectType};
 use crate::prefab::Prefab;
 use crate::processor::PrefabProcessor;
 
@@ -89,7 +89,7 @@ impl PrefabRegistry {
             Ok(str) => str,
             Err(e) => return Err(LoadPrefabError::PrefabFileReadError(e)),
         };
-        match parse_prefab(&prefab_string, self) {
+        match parse_prefab_string(&prefab_string, self) {
             Ok(prefab) => {
                 let entry = self.prefab_map.entry(prefab_name.to_string());
                 return Ok(entry.or_insert(prefab));
@@ -186,4 +186,7 @@ mod test {
 
         assert_eq!(35, *compb.get::<i32>("x"));
     }
+
+        
+
 }

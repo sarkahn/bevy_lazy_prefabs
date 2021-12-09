@@ -11,6 +11,7 @@ pub(crate) struct Prefab {
     name: Option<String>,
     components: Vec<PrefabComponent>,
     processors: Option<Vec<PrefabProcessorData>>,
+    loaders: Option<Vec<PrefabLoad>>,
 }
 
 impl Prefab {
@@ -18,11 +19,13 @@ impl Prefab {
         name: Option<String>,
         components: Vec<PrefabComponent>,
         processors: Option<Vec<PrefabProcessorData>>,
+        loaders: Option<Vec<PrefabLoad>>,
     ) -> Self {
         Prefab {
             name,
             components,
             processors,
+            loaders,
         }
     }
 
@@ -32,6 +35,16 @@ impl Prefab {
 
     pub fn processors(&self) -> Option<&Vec<PrefabProcessorData>> {
         self.processors.as_ref()
+    }
+
+    pub fn loaders(&self) -> Option<&Vec<PrefabLoad>> {
+        self.loaders.as_ref()
+    }
+}
+
+impl From<Prefab> for (Vec<PrefabComponent>, Option<Vec<PrefabProcessorData>>) {
+    fn from(pfb: Prefab) -> Self {
+        (pfb.components, pfb.processors)
     }
 }
 
@@ -106,5 +119,28 @@ impl PrefabProcessorData {
 
     pub fn properties(&self) -> Option<&DynamicStruct> {
         self.properties.as_ref()
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct PrefabLoad {
+    file_name: String,
+    mod_components: Option<Vec<PrefabComponent>>,
+}
+
+impl PrefabLoad {
+    pub fn new(name: &str, mod_components: Option<Vec<PrefabComponent>>) -> Self {
+        PrefabLoad {
+            file_name: name.to_string(),
+            mod_components,
+        }
+    }
+
+    pub fn path(&self) -> &str {
+        self.file_name.as_str()
+    }
+
+    pub fn mod_components(&self) -> Option<&Vec<PrefabComponent>> {
+        self.mod_components.as_ref()
     }
 }
