@@ -1,6 +1,6 @@
 use bevy::{ecs::{system::Command}, prelude::*};
 
-use crate::{registry::PrefabRegistry, prefab::{Prefab}};
+use crate::{registry::PrefabRegistry, prefab::{Prefab, PrefabComponent, PrefabProcessorData, PrefabLoad}};
 
 struct SpawnPrefab {
     prefab_name: String,
@@ -22,31 +22,56 @@ impl Command for SpawnPrefab {
     }
 }
 
-fn add_prefab(prefab: &Prefab, reg: &PrefabRegistry, world: &mut World, entity: Entity) {
-    let entity = &mut world.entity_mut(entity);
-    
+fn add_prefab(prefab: &Prefab, reg: &PrefabRegistry, world: &mut World, id: Entity) {
     if let Some(processors) = prefab.processors() {
-        for data in processors {
-            let processor = reg.get_processor(data.key()).unwrap_or_else(|| {
-                panic!(
-                    "Error spawning prefab, the processor {} hasn't been registered",
-                    data.key()
-                )
-            });
-            processor.process_prefab(data.properties(), entity);
-        }
+        add_processors(processors, reg, world, id);
     }
-
-    let id = entity.id();
 
     if let Some(loaders) = prefab.loaders() {
-        for load in loaders {
-            let nested = reg.get_prefab(load.path()).unwrap();
-            add_prefab(nested, reg, world, id);
-        }
+        add_loaders(loaders, reg, world, id);
     }
 
-    for component in prefab.components() {
+    add_components(prefab.components(), reg, world, id);
+}
+
+fn add_processors(
+    processors: &Vec<PrefabProcessorData>, 
+    reg: &PrefabRegistry, 
+    world: &mut World, 
+    entity: Entity,
+) {
+    for data in processors {
+        let processor = reg.get_processor(data.key()).unwrap_or_else(|| {
+            panic!(
+                "Error spawning prefab, the processor {} hasn't been registered",
+                data.key()
+            )
+        });
+        processor.process_prefab(data.properties(), world, entity);
+    }
+}
+
+fn add_loaders(
+    loaders: &Vec<PrefabLoad>, 
+    reg: &PrefabRegistry, 
+    world: &mut World, 
+    id: Entity) {
+    for load in loaders {
+        let nested = reg.get_prefab(load.path()).unwrap();
+        add_prefab(nested, reg, world, id);
+
+        if let Some(components) = load.mod_components() {
+            add_components(components, reg, world, id);
+        }
+    }
+}
+
+fn add_components(
+    components: &Vec<PrefabComponent>, 
+    reg: &PrefabRegistry,
+    world: &mut World, 
+    id: Entity) {
+    for component in components {
         let reflect = reg.reflect_component(component.name()).unwrap();
         let t = reg.type_info(component.name()).unwrap();
 

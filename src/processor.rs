@@ -26,7 +26,7 @@ pub trait PrefabProcessor {
     ///  * `properties` - An optional  [DynamicStruct] containing any properties read 
     /// from the `.prefab` file. [None] if no properties were receieved.
     ///  * `entity` - The prefab entity, to be modified as needed.
-    fn process_prefab(&self, properties: Option<&DynamicStruct>, entity: &mut EntityMut);
+    fn process_prefab(&self, properties: Option<&DynamicStruct>, world: &mut World, entity: Entity);
 }
 
 pub(crate) struct AddColorMaterial {
@@ -44,22 +44,24 @@ pub(crate) struct AddColorMaterial {
 pub(crate) struct ColorMaterialProcessor;
 
 impl PrefabProcessor for ColorMaterialProcessor {
-    fn process_prefab(&self, properties: Option<&DynamicStruct>, entity: &mut EntityMut) {
-        let err = "Error loading ColorMaterial, missing required property 'texture_path'";
+    fn process_prefab(&self, properties: Option<&DynamicStruct>, world: &mut World, entity: Entity) {
+        let mut col = None;
+        let mut path = None;
+        let mut entity = world.entity_mut(entity);
 
         if let Some(properties) = properties {
-            let tex_path = properties
-                .try_get::<String>("texture_path")
-                .unwrap_or_else(|_| panic!("{}", err));
+            if let Ok(tex_path) = properties.try_get::<String>("texture_path") {
+                path = Some(tex_path.clone());
+            }
 
-            let col = properties.try_get::<Color>("color").ok().cloned();
+            if let Ok(color) = properties.try_get::<Color>("color") {
+                col = Some(color.clone());
+            }
 
             entity.insert(AddColorMaterial {
                 color: col,
-                texture_path: Some(tex_path.to_owned()),
+                texture_path: path,
             });
-        } else {
-            panic!("{}", err);
         }
     }
 
@@ -75,17 +77,32 @@ pub(crate) fn load_color_material(
     mut assets: ResMut<Assets<ColorMaterial>>,
     mut q: Query<(Entity, &mut Handle<ColorMaterial>, &AddColorMaterial)>,
 ) {
-    for (e, mut handle, add) in q.iter_mut() {
-        let tex = add.texture_path.as_ref().map(|tex| server.load(tex.as_str()));
+    for (e, mut handle, add_mat) in q.iter_mut() {
 
-        let color = add.color.unwrap_or_default();
+        println!("Processing color material system");
 
-        let mat = ColorMaterial {
-            texture: tex,
-            color,
+        let tex = match &add_mat.texture_path {
+            Some(path) => Some(server.load(path.as_str())),
+            None => None,
         };
+        let color = add_mat.color;
 
-        *handle = assets.add(mat);
+        println!("{:#?}", color);
+
+        if let Some(existing) = assets.get_mut(handle.clone_weak()) {
+            if tex.is_some() {
+                existing.texture = tex;
+            }
+            if color.is_some() {
+                existing.color = color.unwrap();
+            }
+        } else {
+            *handle = assets.add(ColorMaterial {
+                texture: tex,
+                color: color.unwrap_or_default()
+            });
+        }
+
 
         commands.entity(e).remove::<AddColorMaterial>();
     }
@@ -104,23 +121,58 @@ impl PrefabProcessor for SpriteBundleProcessor {
         SPRITE_BUNDLE_PROCESSOR_KEY
     }
 
-    fn process_prefab(&self, properties: Option<&DynamicStruct>, entity: &mut EntityMut) {
+    fn process_prefab(&self, properties: Option<&DynamicStruct>, world: &mut World, entity: Entity) {
+
+        println!("Inserting sprite bundle");
+
+        let mat = get_color_material(properties, world);
+
+        let mut entity = world.entity_mut(entity);
         entity.insert_bundle(SpriteBundle::default());
 
-        if let Some(properties) = properties {
-            let tex_path = properties.try_get::<String>("texture_path").ok();
+        if let Some(mat) = mat {
+            entity.insert(mat);
+        }
 
-            let col = match properties.try_get::<Color>("color") {
-                Ok(col) => Some(col.to_owned()),
-                Err(_) => None,
+        // if let Some(properties) = properties {
+        //     let tex_path = properties.try_get::<String>("texture_path").ok();
+
+        //     let col = match properties.try_get::<Color>("color") {
+        //         Ok(col) => Some(col.to_owned()),
+        //         Err(_) => None,
+        //     };
+
+        //     entity.insert(AddColorMaterial {
+        //         color: col,
+        //         texture_path: tex_path.cloned(),
+        //     });
+        // }
+    }
+}
+
+fn get_color_material(
+    properties: Option<&DynamicStruct>, 
+    world: &mut World
+) -> Option<Handle<ColorMaterial>> {
+    if let Some(properties) = properties {
+
+        let color = properties.try_get::<Color>("color").ok();
+        let color = color.cloned();
+
+        if let Ok(tex_path) = properties.try_get::<String>("texture_path") {
+            let server = world.get_resource::<AssetServer>().unwrap();
+            let texture: Handle<Texture> = server.load(tex_path.as_str()).clone();
+
+            let mat = ColorMaterial {
+                texture: Some(texture),
+                color: color.unwrap_or_default()
             };
 
-            entity.insert(AddColorMaterial {
-                color: col,
-                texture_path: tex_path.cloned(),
-            });
+            let mut materials = world.get_resource_mut::<Assets<ColorMaterial>>().unwrap();
+            return Some(materials.add(mat));
         }
     }
+    None
 }
 
 #[macro_export]
@@ -134,7 +186,12 @@ macro_rules! impl_bundle_processor {
                 stringify!($key)
             }
 
-            fn process_prefab(&self, properties: Option<&DynamicStruct>, entity: &mut EntityMut) {
+            fn process_prefab( &self, 
+                properties: Option<&DynamicStruct>, 
+                world: &mut World, 
+                entity: Entity) 
+            {
+                let mut entity = world.entity_mut(entity);
                 entity.insert_bundle($bundle);
                 drop(&properties);
             }

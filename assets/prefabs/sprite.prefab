@@ -1,6 +1,6 @@
 {
     processor!(SpriteBundle {
-        texture_path: "icon.png",
+        texture_path: "alien.png",
         color: Color::RED,
     })
 }

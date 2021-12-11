@@ -1,4 +1,4 @@
-use bevy::{prelude::*, render::render_graph::base::MainPass};
+use bevy::{prelude::*, render::{render_graph::base::MainPass, camera::{OrthographicProjection, Camera}}};
 
 use crate::{
     PrefabRegistry, 
@@ -36,10 +36,10 @@ impl Plugin for LazyPrefabsCommonTypesPlugin {
 
         reg.register_type::<Transform>();
         reg.register_type::<GlobalTransform>();
-        reg.register_type::<Handle<Mesh>>();
         reg.register_type::<Color>();
         reg.register_type::<Vec3>();
         reg.register_type::<Vec2>();
+        reg.register_type::<Camera>();
     }
 }
 
@@ -67,6 +67,7 @@ impl Plugin for LazyPrefabsBevy2DPlugin {
             .unwrap();
 
         reg.register_type::<Sprite>();
+        reg.register_type::<OrthographicProjection>();
         reg.register_type::<Handle<ColorMaterial>>();
         reg.register_type::<Handle<TextureAtlas>>();
 

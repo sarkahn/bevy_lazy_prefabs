@@ -53,6 +53,8 @@ prefab_fields = _{ prefab_field ~ ("," ~ prefab_field)* ~ ","? }
 
 processor = { "processor!(" ~ type_name ~ ("{" ~ fields* ~ "}")? ~ ")" }
  
-load = { "load!(" ~ file_name ~ ("{" ~ components ~ "}")? ~ ")" }
+load = { "load!(" ~ file_name ~ ("{" ~ load_fields ~ "}")? ~ ")" }
+load_field = _{ (processor | component) }
+load_fields = _{ load_field ~ ("," ~ load_field)* ~ ","? }
  
 WHITESPACE = _{ " " | "\t" | "\r" | "\n" }

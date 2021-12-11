@@ -32,6 +32,8 @@ pub enum LoadPrefabError {
     MissingMaterialField(String),
     #[error("Error parsing value type {0} ({1})")]
     ValueParseError(String, String),
+    #[error("Error parsing loader - unknown field rule {0}")]
+    LoadParseError(String),
 }
 
 pub(crate) fn parse_prefab_string(input: &str, registry: &mut PrefabRegistry) -> Result<Prefab, LoadPrefabError> {
@@ -287,10 +289,21 @@ fn parse_load(
 
     let mut components = None;
 
-    for component in pairs {
-        let component = parse_component(component, registry)?;
-        let components = components.get_or_insert(Vec::new());
-        components.push(component);
+    for field in pairs {
+        match field.as_rule() {
+            Rule::component => {
+                let component = parse_component(field, registry)?;
+                let components = components.get_or_insert(Vec::new());
+                components.push(component);
+            }
+            Rule::processor => {
+
+            }
+            _ => {
+                return Err(LoadPrefabError::LoadParseError(field.as_str().to_string()))
+            }
+        }
+
     }
 
     Ok(PrefabLoad::new(path, components))
