@@ -1,3 +1,5 @@
+use std::{any::TypeId, sync::Arc};
+
 use bevy::{
     prelude::*,
     reflect::DynamicStruct,
@@ -5,47 +7,31 @@ use bevy::{
 
 use derivative::*;
 
+use crate::{PrefabProcessor, commands::PrefabCommand};
+
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub(crate) struct Prefab {
     name: Option<String>,
-    components: Vec<PrefabComponent>,
-    processors: Option<Vec<PrefabProcessorData>>,
-    loaders: Option<Vec<PrefabLoad>>,
+    #[derivative(Debug = "ignore")]
+    commands: Vec<PrefabCommand>,
 }
 
 impl Prefab {
     pub fn new(
         name: Option<String>,
-        components: Vec<PrefabComponent>,
-        processors: Option<Vec<PrefabProcessorData>>,
-        loaders: Option<Vec<PrefabLoad>>,
+        commands: Vec<PrefabCommand>,
     ) -> Self {
         Prefab {
             name,
-            components,
-            processors,
-            loaders,
+            commands,
         }
     }
 
-    pub fn components(&self) -> &Vec<PrefabComponent> {
-        &self.components
-    }
 
-    pub fn processors(&self) -> Option<&Vec<PrefabProcessorData>> {
-        self.processors.as_ref()
-    }
-
-    pub fn loaders(&self) -> Option<&Vec<PrefabLoad>> {
-        self.loaders.as_ref()
-    }
-}
-
-impl From<Prefab> for (Vec<PrefabComponent>, Option<Vec<PrefabProcessorData>>) {
-    fn from(pfb: Prefab) -> Self {
-        (pfb.components, pfb.processors)
-    }
+    pub fn commands(&self) -> &Vec<PrefabCommand> {
+        &self.commands
+    } 
 }
 
 /// A name/value pair representing a field on a type
@@ -61,10 +47,14 @@ impl From<ReflectField> for (String, Box<dyn Reflect>) {
     }
 }
 
-#[derive(Debug)]
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub(crate) struct PrefabComponent {
     name: String,
     dynamic_value: Box<dyn Reflect>,
+    #[derivative(Debug = "ignore")]
+    reflect: ReflectComponent,
+    type_id: TypeId,
 }
 
 impl From<PrefabComponent> for ReflectField {
@@ -77,10 +67,17 @@ impl From<PrefabComponent> for ReflectField {
 }
 
 impl PrefabComponent {
-    pub fn new(name: &str, root: Box<dyn Reflect>) -> Self {
+    pub fn new(
+        name: &str, 
+        root: Box<dyn Reflect>, 
+        reflect: ReflectComponent,
+        type_id: TypeId
+    ) -> Self {
         PrefabComponent {
             name: name.to_string(),
             dynamic_value: root,
+            reflect,
+            type_id
         }
     }
 
@@ -95,6 +92,14 @@ impl PrefabComponent {
     pub fn root_mut(&mut self) -> &mut Box<dyn Reflect> {
         &mut self.dynamic_value
     }
+
+    pub fn reflect(&self) -> &ReflectComponent {
+        &self.reflect
+    }
+
+    pub fn type_id(&self) -> TypeId {
+        self.type_id
+    }
 }
 
 #[derive(Derivative)]
@@ -103,13 +108,20 @@ pub(crate) struct PrefabProcessorData {
     key: String,
     #[derivative(Debug = "ignore")]
     properties: Option<DynamicStruct>,
+    #[derivative(Debug = "ignore")]
+    processor: Arc<dyn PrefabProcessor + Send + Sync + 'static>,
 }
 
 impl PrefabProcessorData {
-    pub fn new(key: &str, properties: Option<DynamicStruct>) -> Self {
+    pub fn new(
+        key: &str, 
+        properties: Option<DynamicStruct>, 
+        processor: Arc<dyn PrefabProcessor + Send + Sync + 'static>,
+    ) -> Self {
         Self {
             key: key.to_string(),
             properties,
+            processor,
         }
     }
 
@@ -119,6 +131,10 @@ impl PrefabProcessorData {
 
     pub fn properties(&self) -> Option<&DynamicStruct> {
         self.properties.as_ref()
+    }
+
+    pub fn processor(&self) -> &Arc<dyn PrefabProcessor + Send + Sync + 'static >{
+        &self.processor
     }
 }
 

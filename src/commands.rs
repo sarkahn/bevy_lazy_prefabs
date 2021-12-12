@@ -1,6 +1,8 @@
+use std::sync::Arc;
+
 use bevy::{ecs::{system::Command}, prelude::*};
 
-use crate::{registry::PrefabRegistry, prefab::{Prefab, PrefabComponent, PrefabProcessorData, PrefabLoad}};
+use crate::{registry::PrefabRegistry, prefab::{Prefab, PrefabComponent, PrefabProcessorData, PrefabLoad}, PrefabProcessor};
 
 struct SpawnPrefab {
     prefab_name: String,
@@ -9,83 +11,24 @@ struct SpawnPrefab {
 impl Command for SpawnPrefab {
     fn write(self: Box<Self>, world: &mut World) {
         world.resource_scope(|world, mut reg: Mut<PrefabRegistry>| {
-            
-            // Load the prefab if it's not already loaded
+
             reg.load(self.prefab_name.as_str()).unwrap();
 
-            let prefab = reg.get_prefab(self.prefab_name.as_str()).unwrap();
+            let prefab = reg.get_arc_prefab(self.prefab_name.as_str()).unwrap().clone();
 
             let entity = world.spawn().id();
+            load_prefab(prefab, &mut reg, world, entity);
 
-            add_prefab(prefab, &reg, world, entity);            
         });
     }
 }
 
-fn add_prefab(prefab: &Prefab, reg: &PrefabRegistry, world: &mut World, id: Entity) {
-    if let Some(processors) = prefab.processors() {
-        add_processors(processors, reg, world, id);
-    }
-
-    if let Some(loaders) = prefab.loaders() {
-        add_loaders(loaders, reg, world, id);
-    }
-
-    add_components(prefab.components(), reg, world, id);
-}
-
-fn add_processors(
-    processors: &Vec<PrefabProcessorData>, 
-    reg: &PrefabRegistry, 
-    world: &mut World, 
-    entity: Entity,
-) {
-    for data in processors {
-        let processor = reg.get_processor(data.key()).unwrap_or_else(|| {
-            panic!(
-                "Error spawning prefab, the processor {} hasn't been registered",
-                data.key()
-            )
-        });
-        processor.process_prefab(data.properties(), world, entity);
+fn load_prefab(prefab: Arc<Prefab>, registry: &mut PrefabRegistry, world: &mut World, entity: Entity) {
+    for command in prefab.commands() {
+        process_command(command, world, registry, entity);
     }
 }
 
-fn add_loaders(
-    loaders: &Vec<PrefabLoad>, 
-    reg: &PrefabRegistry, 
-    world: &mut World, 
-    id: Entity) {
-    for load in loaders {
-        let nested = reg.get_prefab(load.path()).unwrap();
-        add_prefab(nested, reg, world, id);
-
-        if let Some(components) = load.mod_components() {
-            add_components(components, reg, world, id);
-        }
-    }
-}
-
-fn add_components(
-    components: &Vec<PrefabComponent>, 
-    reg: &PrefabRegistry,
-    world: &mut World, 
-    id: Entity) {
-    for component in components {
-        let reflect = reg.reflect_component(component.name()).unwrap();
-        let t = reg.type_info(component.name()).unwrap();
-
-        if world
-            .entity(id)
-            .contains_type_id(t.registration.type_id()) 
-        {
-            reflect.apply_component(world, id, component.root());
-        } else {
-            reflect.add_component(world, id, component.root());
-        }
-
-    } 
-}
 
 /// Adds the `spawn_prefab` option to bevy [Commands].
 pub trait SpawnPrefabCommands {
@@ -98,6 +41,38 @@ impl<'w> SpawnPrefabCommands for Commands<'w> {
         self.add(SpawnPrefab {
             prefab_name: prefab_name.to_string(),
         });
+    }
+}
+
+pub(crate) enum PrefabCommand {
+    AddComponent(PrefabComponent),
+    Processor(PrefabProcessorData),
+    LoadPrefab(PrefabLoad),
+}
+
+fn process_command(command: &PrefabCommand, world: &mut World, registry: &mut PrefabRegistry, entity: Entity) {
+    match command {
+        PrefabCommand::AddComponent(comp) => {
+            let type_id = comp.type_id();
+            if world
+            .entity(entity)
+            .contains_type_id(type_id) 
+            {
+                comp.reflect().apply_component(world, entity, comp.root());
+            } else {
+                comp.reflect().add_component(world, entity, comp.root());
+            }
+
+        },
+        PrefabCommand::Processor(proc) => {
+            proc.processor().process_prefab(proc.properties(), world, entity);
+        },
+        PrefabCommand::LoadPrefab(load) => {
+            registry.load(load.path()).unwrap();
+            let prefab = registry.get_arc_prefab(load.path()).unwrap().clone();
+
+            load_prefab(prefab, registry, world, entity);
+        },
     }
 }
 

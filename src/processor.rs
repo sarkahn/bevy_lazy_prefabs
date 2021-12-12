@@ -1,4 +1,4 @@
-use bevy::{ecs::world::EntityMut, prelude::*, reflect::DynamicStruct};
+use bevy::{prelude::*, reflect::DynamicStruct};
 
 use crate::dynamic_cast::GetValue;
 
@@ -29,11 +29,6 @@ pub trait PrefabProcessor {
     fn process_prefab(&self, properties: Option<&DynamicStruct>, world: &mut World, entity: Entity);
 }
 
-pub(crate) struct AddColorMaterial {
-    color: Option<Color>,
-    texture_path: Option<String>,
-}
-
 /// A processor for a Handle<ColorMaterial>.
 ///
 /// ## Optional Properties:
@@ -47,7 +42,6 @@ impl PrefabProcessor for ColorMaterialProcessor {
     fn process_prefab(&self, properties: Option<&DynamicStruct>, world: &mut World, entity: Entity) {
         let mut col = None;
         let mut path = None;
-        let mut entity = world.entity_mut(entity);
 
         if let Some(properties) = properties {
             if let Ok(tex_path) = properties.try_get::<String>("texture_path") {
@@ -58,9 +52,32 @@ impl PrefabProcessor for ColorMaterialProcessor {
                 col = Some(color.clone());
             }
 
-            entity.insert(AddColorMaterial {
-                color: col,
-                texture_path: path,
+            if let Some(existing_mat) =  world.get_mut::<Handle<ColorMaterial>>(entity) {
+                if col.is_none() && path.is_none() {
+                    return;
+                }
+
+                let existing_mat = existing_mat.clone_weak();
+                world.resource_scope(|world, mut materials: Mut<Assets<ColorMaterial>>| {
+                    let mat = materials.get_mut(existing_mat).unwrap();
+
+                    update_mat(world, mat, col, path);
+                });
+            } else {
+                world.resource_scope(|world, mut materials: Mut<Assets<ColorMaterial>>| {
+                    let mut mat = ColorMaterial::default();
+
+                    update_mat(world, &mut mat, col, path);
+
+                    let handle = materials.add(mat);
+
+                    world.entity_mut(entity).insert(handle);
+                });
+            }
+        } else {
+            world.resource_scope(|world, mut materials: Mut<Assets<ColorMaterial>>| {
+                let handle = materials.add(ColorMaterial::default());
+                world.entity_mut(entity).insert(handle);
             });
         }
     }
@@ -70,41 +87,14 @@ impl PrefabProcessor for ColorMaterialProcessor {
     }
 }
 
-/// Processes the [AddColorMaterial] component to add a ColorMaterial to an entity.
-pub(crate) fn load_color_material(
-    mut commands: Commands,
-    server: Res<AssetServer>,
-    mut assets: ResMut<Assets<ColorMaterial>>,
-    mut q: Query<(Entity, &mut Handle<ColorMaterial>, &AddColorMaterial)>,
-) {
-    for (e, mut handle, add_mat) in q.iter_mut() {
-
-        println!("Processing color material system");
-
-        let tex = match &add_mat.texture_path {
-            Some(path) => Some(server.load(path.as_str())),
-            None => None,
-        };
-        let color = add_mat.color;
-
-        println!("{:#?}", color);
-
-        if let Some(existing) = assets.get_mut(handle.clone_weak()) {
-            if tex.is_some() {
-                existing.texture = tex;
-            }
-            if color.is_some() {
-                existing.color = color.unwrap();
-            }
-        } else {
-            *handle = assets.add(ColorMaterial {
-                texture: tex,
-                color: color.unwrap_or_default()
-            });
-        }
-
-
-        commands.entity(e).remove::<AddColorMaterial>();
+fn update_mat(world: &mut World, mat: &mut ColorMaterial, col: Option<Color>, path: Option<String>) {
+    if let Some(col) = col {
+        mat.color = col;
+    }
+    if let Some(path) = path {
+        let server = world.get_resource::<AssetServer>().unwrap();
+        let tex: Handle<Texture> = server.load(path.as_str());
+        mat.texture = Some(tex);
     }
 }
 
@@ -122,9 +112,6 @@ impl PrefabProcessor for SpriteBundleProcessor {
     }
 
     fn process_prefab(&self, properties: Option<&DynamicStruct>, world: &mut World, entity: Entity) {
-
-        println!("Inserting sprite bundle");
-
         let mat = get_color_material(properties, world);
 
         let mut entity = world.entity_mut(entity);
@@ -133,20 +120,6 @@ impl PrefabProcessor for SpriteBundleProcessor {
         if let Some(mat) = mat {
             entity.insert(mat);
         }
-
-        // if let Some(properties) = properties {
-        //     let tex_path = properties.try_get::<String>("texture_path").ok();
-
-        //     let col = match properties.try_get::<Color>("color") {
-        //         Ok(col) => Some(col.to_owned()),
-        //         Err(_) => None,
-        //     };
-
-        //     entity.insert(AddColorMaterial {
-        //         color: col,
-        //         texture_path: tex_path.cloned(),
-        //     });
-        // }
     }
 }
 
@@ -156,8 +129,7 @@ fn get_color_material(
 ) -> Option<Handle<ColorMaterial>> {
     if let Some(properties) = properties {
 
-        let color = properties.try_get::<Color>("color").ok();
-        let color = color.cloned();
+        let color = properties.try_get::<Color>("color").ok().cloned();
 
         if let Ok(tex_path) = properties.try_get::<String>("texture_path") {
             let server = world.get_resource::<AssetServer>().unwrap();
@@ -174,6 +146,7 @@ fn get_color_material(
     }
     None
 }
+
 
 #[macro_export]
 /// Implement a processor which does nothing but insert a bundle.

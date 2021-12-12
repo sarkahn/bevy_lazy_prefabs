@@ -5,6 +5,7 @@ use crate::processor::PrefabProcessor;
 use bevy::prelude::{AppBuilder, ReflectComponent};
 use bevy::reflect::TypeRegistration;
 use std::fs;
+use std::sync::Arc;
 
 use bevy::{
     reflect::{GetTypeRegistration, Reflect},
@@ -14,9 +15,12 @@ use bevy::{
 /// Manages and caches various types of prefab data.
 #[derive(Default)]
 pub struct PrefabRegistry {
-    prefab_map: HashMap<String, Prefab>,
+    //prefab_map: HashMap<String, Prefab>,
     type_info_map: HashMap<String, TypeInfo>,
-    processor_map: HashMap<String, Box<dyn PrefabProcessor + Send + Sync>>,
+    //processor_map: HashMap<String, Box<dyn PrefabProcessor + Send + Sync>>,
+    processors: HashMap<String, Arc<dyn PrefabProcessor + Send + Sync>>,
+
+    arc_prefabs: HashMap<String, Arc<Prefab>>,
 }
 
 impl PrefabRegistry {
@@ -39,13 +43,19 @@ impl PrefabRegistry {
     /// Initialize a [PrefabProcessor] by type.
     pub fn init_processor<T: PrefabProcessor + Default + Send + Sync + 'static>(&mut self) {
         let p = T::default();
-        self.processor_map.insert(p.key().to_string(), Box::new(p));
+        //self.processor_map.insert(p.key().to_string(), Box::new(p));
+        self.processors.insert(p.key().to_string(), Arc::new(p));
     }
 
     /// Add a [PrefabProcessor] to the registry.
-    pub fn add_processor(&mut self, processor: Box<dyn PrefabProcessor + Send + Sync + 'static>) {
-        self.processor_map
-            .insert(processor.key().to_string(), processor);
+    pub fn add_processor(
+        &mut self, 
+        //processor: Box<dyn PrefabProcessor + Send + Sync + 'static>
+        processor: Arc<dyn PrefabProcessor + Send + Sync + 'static>
+    ) {
+        //self.processor_map
+        //    .insert(processor.key().to_string(), processor);
+        self.processors.insert(processor.key().to_string(), processor);
     }
     
     /// Attempts to load a prefab from disk. 
@@ -59,29 +69,10 @@ impl PrefabRegistry {
         self.try_load(prefab_name).map(|_| ())
     }
 
-    /// Remove a prefab from the registry. It will need to be loaded from disk
-    /// again if re-loaded.
-    pub fn remove_prefab(&mut self, prefab_name: &str) {
-        self.prefab_map.remove(prefab_name);
-    }
-
-    /// Retrieve a prefab from the registry if it's been loaded yet.
-    pub(crate) fn get_prefab(&self, prefab_name: &str) -> Option<&Prefab> {
-        self.prefab_map.get(prefab_name)
-    }
-
-    /// Retrieve a registered [PrefabProcessor].
-    pub(crate) fn get_processor(&self, key: &str) -> Option<&dyn PrefabProcessor> {
-        match self.processor_map.get(key) {
-            Some(processor) => Some(&**processor),
-            None => None,
-        }
-    }
-
     /// Load the prefab from disk, or retrieve it if it's already been loaded.
-    pub(crate) fn try_load(&mut self, prefab_name: &str) -> Result<&Prefab, LoadPrefabError> {
-        if self.prefab_map.contains_key(prefab_name) {
-            return Ok(&self.prefab_map[prefab_name]);
+    pub(crate) fn try_load(&mut self, prefab_name: &str) -> Result<&Arc<Prefab>, LoadPrefabError> {
+        if self.arc_prefabs.contains_key(prefab_name) {
+            return Ok(&self.arc_prefabs[prefab_name]);
         }
 
         let path = ["assets/prefabs/", prefab_name].join("");
@@ -91,58 +82,53 @@ impl PrefabRegistry {
         };
         match parse_prefab_string(&prefab_string, self) {
             Ok(prefab) => {
-                let entry = self.prefab_map.entry(prefab_name.to_string());
-                return Ok(entry.or_insert(prefab));
+                //let entry = self.prefab_map.entry(prefab_name.to_string());
+                let entry = self.arc_prefabs.entry(prefab_name.to_string());
+                return Ok(entry.or_insert(Arc::new(prefab)));
             }
             Err(e) => Err(e),
         }
-    }
-
-
-    pub(crate) fn reflect_component(&self, type_name: &str) -> Option<&ReflectComponent> {
-        let registration = self.registration(type_name)?;
-        registration.data::<ReflectComponent>()
     }
 
     pub(crate) fn type_info(&self, type_name: &str) -> Option<&TypeInfo> {
         self.type_info_map.get(type_name)
     }
 
-    fn registration(&self, type_name: &str) -> Option<&TypeRegistration> {
-        //self.type_map.get(type_name)
-        match self.type_info_map.get(type_name) {
-            Some(t) => Some(&t.registration),
-            None => None,
-        }
+
+    pub(crate) fn get_processor(&self, key: &str) -> Option<&Arc<dyn PrefabProcessor + Send + Sync + 'static>> {
+        self.processors.get(key)
     }
 
-
+    pub(crate) fn get_arc_prefab(&self, name: &str) -> Option<&Arc<Prefab>> {
+        self.arc_prefabs.get(name)
+    } 
 }
 
 pub trait PrefabRegisterType {
-    fn register_prefab_type<T: Reflect + Default + GetTypeRegistration>(&mut self);
+    fn register_prefab_type<T: Reflect + Default + GetTypeRegistration>(&mut self) -> &mut Self;
 }
 
 impl PrefabRegisterType for AppBuilder {
-    fn register_prefab_type<T: Reflect + Default + GetTypeRegistration>(&mut self) {
+    fn register_prefab_type<T: Reflect + Default + GetTypeRegistration>(&mut self) -> &mut Self {
         let world = self.world_mut();
         let mut reg = world.get_resource_mut::<PrefabRegistry>().unwrap();
         reg.register_type::<T>();
+        self
     }
 }
 
 pub trait PrefabRegisterProcessor {
-    fn add_prefab_processor(&mut self, processor: Box<dyn PrefabProcessor + Send + Sync>);
+    fn add_prefab_processor(&mut self, processor: Arc<dyn PrefabProcessor + Send + Sync>);
     fn init_prefab_processor<T: PrefabProcessor + Default + Send + Sync + 'static>(&mut self);
 }
 
 impl PrefabRegisterProcessor for AppBuilder {
     fn init_prefab_processor<T: PrefabProcessor + Default + Send + Sync + 'static>(&mut self) {
         let t = T::default();
-        self.add_prefab_processor(Box::new(t));
+        self.add_prefab_processor(Arc::new(t));
     }
 
-    fn add_prefab_processor(&mut self, processor: Box<dyn PrefabProcessor + Send + Sync>) {
+    fn add_prefab_processor(&mut self, processor: Arc<dyn PrefabProcessor + Send + Sync + 'static>) {
         let world = self.world_mut();
         let mut reg = world.get_resource_mut::<PrefabRegistry>().unwrap();
         reg.add_processor(processor);
@@ -177,14 +163,14 @@ mod test {
 
         let prefab = reg.try_load("test.prefab").unwrap();
 
-        let components = prefab.components();
+        // let components = prefab.components();
 
-        assert_eq!(components.len(), 2);
-        assert_eq!(components[0].name(), "TestComponentA");
-        let compb = components[1].root();
-        let compb = compb.cast_ref::<DynamicStruct>();
+        // assert_eq!(components.len(), 2);
+        // assert_eq!(components[0].name(), "TestComponentA");
+        // let compb = components[1].root();
+        // let compb = compb.cast_ref::<DynamicStruct>();
 
-        assert_eq!(35, *compb.get::<i32>("x"));
+        // assert_eq!(35, *compb.get::<i32>("x"));
     }
 
         

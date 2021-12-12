@@ -74,7 +74,5 @@ impl Plugin for LazyPrefabsBevy2DPlugin {
         app.init_prefab_processor::<ColorMaterialProcessor>();
         app.init_prefab_processor::<OrthographicCameraBundleProcessor>();
         app.init_prefab_processor::<SpriteBundleProcessor>();
-
-        app.add_system(load_color_material.system());
     }
 }

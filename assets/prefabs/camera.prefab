@@ -2,7 +2,7 @@
     processor!(OrthographicCameraBundle),
     Transform {
         translation: Vec3 {
-            x: 150.0,
+            x: 50.0,
         },
     },
     OrthographicProjection {
