@@ -1,0 +1,6 @@
+{
+    processor!(PbrBundle {
+        shape: Shape::Cube,
+        size: 2.0,
+    }),
+}

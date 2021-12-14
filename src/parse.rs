@@ -1,13 +1,13 @@
-use std::{ops::Range, any::Any};
-use thiserror::Error;
 use bevy::{
     prelude::*,
-    reflect::{DynamicList, DynamicStruct, DynamicTuple, DynamicTupleStruct, Reflect, ReflectRef}, asset::AssetLoader,
+    reflect::{DynamicList, DynamicStruct, DynamicTuple, DynamicTupleStruct, Reflect, ReflectRef},
 };
 use pest::{error::Error, iterators::Pair, Parser};
 use pest_derive::*;
+use std::{any::Any, ops::Range};
+use thiserror::Error;
 
-use crate::{dynamic_cast::*, registry::TypeInfo, PrefabProcessor, commands::PrefabCommand};
+use crate::{commands::PrefabCommand, dynamic_cast::*, registry::TypeInfo};
 use crate::{prefab::*, registry::PrefabRegistry};
 
 #[derive(Parser)]
@@ -16,32 +16,37 @@ struct PrefabParser;
 
 #[derive(Error, Debug)]
 pub enum LoadPrefabError {
-    #[error("Error reading prefab file")]
+    #[error("Error reading prefab file.")]
     PrefabFileReadError(#[from] std::io::Error),
-    #[error("Error parsing component - {0} was not registered with the PrefabRegistry")]
+    #[error("Error parsing component - {0} was not registered with the PrefabRegistry.")]
     UnregisteredPrefabComponent(String),
-    #[error("Pest error parsing prefab string")]
+    #[error("Pest error parsing prefab string.")]
     PestParseError(#[from] Error<Rule>),
-    #[error("Error parsing prefab - unknown value rule {0}")]
+    #[error("Error parsing prefab - unknown value rule: {0}.")]
     UnhandledValueRule(String),
-    #[error("Error parsing prefab - unknown field rule {0}")]
+    #[error("Error parsing prefab - unknown field rule: {0}.")]
     UnhandledPrefabFieldRule(String),
-    #[error("Error parsing prefab - unknown material field {0}")]
+    #[error("Error parsing prefab - unknown material field: {0}.")]
     UnhandledMaterialRule(String),
-    #[error("Error parsing prefab material - missing required field {0}")]
+    #[error("Error parsing prefab material - missing required field {0}.")]
     MissingMaterialField(String),
-    #[error("Error parsing value type {0} ({1})")]
+    #[error("Error parsing value type '{0}' from '{1}'.")]
     ValueParseError(String, String),
     #[error("Error parsing loader - unknown field rule {0}")]
     LoadParseError(String),
-    #[error("Error parsing prefab - processor key {0} was not registered")]
+    #[error("Error parsing prefab - processor key {0} was not registered.")]
     UnregisteredProcessor(String),
-    #[error("Error parsing prefab - prefab component {0} is not properly reflected. Ensure custom
-    components #[derive(Reflect)] and #[reflect(Component)]")]
+    #[error(
+        "Error parsing prefab - prefab component {0} is not properly reflected. Ensure custom
+    components have the #[derive(Reflect)] and #[reflect(Component)] attributes."
+    )]
     UnreflectedCompoent(String),
 }
 
-pub(crate) fn parse_prefab_string(input: &str, registry: &mut PrefabRegistry) -> Result<Prefab, LoadPrefabError> {
+pub(crate) fn parse_prefab_string(
+    input: &str,
+    registry: &mut PrefabRegistry,
+) -> Result<Prefab, LoadPrefabError> {
     let mut parsed = match PrefabParser::parse(Rule::prefab, input) {
         Ok(parsed) => parsed,
         Err(e) => return Err(LoadPrefabError::PestParseError(e)),
@@ -50,7 +55,10 @@ pub(crate) fn parse_prefab_string(input: &str, registry: &mut PrefabRegistry) ->
     parse_prefab(parsed.next().unwrap(), registry)
 }
 
-fn parse_prefab(pair: Pair<Rule>, registry: &mut PrefabRegistry) -> Result<Prefab, LoadPrefabError> {
+fn parse_prefab(
+    pair: Pair<Rule>,
+    registry: &mut PrefabRegistry,
+) -> Result<Prefab, LoadPrefabError> {
     let mut commands = Vec::new();
 
     let pair = pair.into_inner();
@@ -64,7 +72,6 @@ fn parse_prefab(pair: Pair<Rule>, registry: &mut PrefabRegistry) -> Result<Prefa
             Rule::component => {
                 let comp = parse_component(field, registry)?;
                 commands.push(PrefabCommand::AddComponent(comp));
-                
             }
             Rule::processor => {
                 let processor = parse_processor(field, registry)?;
@@ -73,7 +80,7 @@ fn parse_prefab(pair: Pair<Rule>, registry: &mut PrefabRegistry) -> Result<Prefa
             }
             Rule::load => {
                 let load = parse_load(field, registry)?;
-                
+
                 commands.push(PrefabCommand::LoadPrefab(load));
             }
             _ => {
@@ -127,7 +134,12 @@ fn parse_component(
     };
 
     let type_id = type_info.type_id();
-    Ok(PrefabComponent::new(type_name, root, reflect.clone(), type_id))
+    Ok(PrefabComponent::new(
+        type_name,
+        root,
+        reflect.clone(),
+        type_id,
+    ))
 }
 
 fn parse_field(field: Pair<Rule>) -> Result<ReflectField, LoadPrefabError> {
@@ -257,6 +269,10 @@ fn parse_value(pair: Pair<Rule>) -> Result<Box<dyn Reflect>, LoadPrefabError> {
             };
             Ok(Box::new(col))
         }
+        Rule::shape => {
+            let shape = pair.into_inner().next().unwrap().as_str();
+            Ok(Box::new(shape.to_string()))
+        }
         _ => {
             let str = format!("{:#?}", pair.as_rule());
             Err(LoadPrefabError::UnhandledValueRule(str))
@@ -269,7 +285,10 @@ fn parse_string(pair: Pair<Rule>) -> String {
     str[1..str.len().saturating_sub(1)].to_string()
 }
 
-fn parse_processor(pair: Pair<Rule>, registry: &PrefabRegistry) -> Result<PrefabProcessorData, LoadPrefabError> {
+fn parse_processor(
+    pair: Pair<Rule>,
+    registry: &PrefabRegistry,
+) -> Result<PrefabProcessorData, LoadPrefabError> {
     let mut pairs = pair.into_inner();
     let key = pairs.next().unwrap().as_str();
 
@@ -285,16 +304,16 @@ fn parse_processor(pair: Pair<Rule>, registry: &PrefabRegistry) -> Result<Prefab
     let processor = match registry.get_processor(key) {
         Some(processor) => processor,
         None => return Err(LoadPrefabError::UnregisteredProcessor(key.to_string())),
-    }.clone();
+    }
+    .clone();
 
     Ok(PrefabProcessorData::new(key, properties, processor))
 }
 
 fn parse_load(
-    pair: Pair<Rule>, 
-    registry: &mut PrefabRegistry
+    pair: Pair<Rule>,
+    registry: &mut PrefabRegistry,
 ) -> Result<PrefabLoad, LoadPrefabError> {
-
     let mut pairs = pair.into_inner();
 
     let path = pairs.next().unwrap().as_str();
@@ -311,18 +330,13 @@ fn parse_load(
                 let components = components.get_or_insert(Vec::new());
                 components.push(component);
             }
-            Rule::processor => {
-
-            }
-            _ => {
-                return Err(LoadPrefabError::LoadParseError(field.as_str().to_string()))
-            }
+            Rule::processor => {}
+            _ => return Err(LoadPrefabError::LoadParseError(field.as_str().to_string())),
         }
     }
 
-    Ok(PrefabLoad::new(path, components))
+    Ok(PrefabLoad::new(path))
 }
-
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub(crate) enum ReflectType {
@@ -350,11 +364,10 @@ impl<'a> From<ReflectRef<'a>> for ReflectType {
 #[cfg(test)]
 mod test {
     use bevy::prelude::*;
-    use bevy::reflect::{GetTypeRegistration, FromType};
-    use bevy::utils::HashMap;
+    use bevy::reflect::DynamicStruct;
     use pest::Parser;
 
-    use crate::dynamic_cast::DynamicCast;
+    use crate::dynamic_cast::*;
     use crate::processor::ColorMaterialProcessor;
     use crate::registry::PrefabRegistry;
     use crate::{
@@ -363,7 +376,7 @@ mod test {
     };
     use bevy::ecs::reflect::ReflectComponent;
 
-    use super::{parse_field, parse_processor, parse_string, parse_prefab, parse_load};
+    use super::{parse_field, parse_load, parse_processor, parse_string};
 
     #[test]
     fn char_parse() {
@@ -438,11 +451,6 @@ mod test {
         assert_eq!(transform.translation.x, 10.5);
     }
 
-    #[derive(Reflect, Default)]
-    struct TestStruct {
-        i: i32,
-    }
-
     #[test]
     fn string_parse() {
         let input = "\"Hello\"";
@@ -481,15 +489,17 @@ mod test {
         assert_eq!("a", field.name);
         assert_eq!("hi", field.value.cast_ref::<String>());
     }
-    
+
     #[derive(Reflect, Default)]
+    #[reflect(Component)]
     struct TestComponentA;
 
     #[derive(Reflect, Default)]
+    #[reflect(Component)]
     struct TestComponentB {
         x: i32,
     }
-    
+
     #[test]
     fn load_parse() {
         let input = "load!(test.prefab)";
@@ -502,24 +512,29 @@ mod test {
         let load = parse_load(parsed.next().unwrap(), &mut reg).unwrap();
 
         assert_eq!("test.prefab", load.path());
+
+        let prefab = reg.try_load(load.path()).unwrap();
+
+        match &prefab.commands()[0] {
+            crate::commands::PrefabCommand::AddComponent(comp) => {
+                assert_eq!(comp.name(), "TestComponentA");
+            },
+            _ => panic!()
+        };
+        match &prefab.commands()[1] {
+            crate::commands::PrefabCommand::AddComponent(comp) => {
+                assert_eq!(comp.name(), "TestComponentB");
+                let comp = comp.root().cast_ref::<DynamicStruct>();
+                assert_eq!(35, *comp.get::<i32>("x"));
+            },
+            _ => panic!()
+        };
     }
 
     #[test]
-    fn reflect_test() {
-        let t = get_type::<TestComponentA>();
-
-        t.unwrap();
+    fn parse_mesh() {
+        let input = "shape::Cube { size: 15.0 }";
+        let parsed = PrefabParser::parse(Rule::value, input).unwrap().next().unwrap();
+        let field = parse_value(parsed);
     }
-
-
-    fn get_type<T: GetTypeRegistration + Reflect + Default>() -> Option<ReflectComponent> {
-        let instance = T::default();
-        let reflect_ref = instance.reflect_ref();
-        let t = T::get_type_registration();
-        let mut v = HashMap::default();
-        v.insert("A", t);
-        
-        v["A"].data::<ReflectComponent>().cloned()
-    }
-
 }

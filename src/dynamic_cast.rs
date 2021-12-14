@@ -1,10 +1,12 @@
+//! Utility traits for easily retrieving values from [Reflect] components. 
+
 use bevy::reflect::{DynamicStruct, GetTypeRegistration, Reflect, Struct};
 use thiserror::Error;
 
+/// A utility trait for easily casting [Reflect] components to an underlying type.
 pub trait DynamicCast: Reflect {
     /// Downcast to `&T` and unwrap immediately. Will panic if
     /// given the wrong type.
-
     fn cast_ref<T: Reflect>(&self) -> &T;
     /// Downcast to `&mut T` and unwrap immediately. Will panic if given
     /// the wrong type.
@@ -21,6 +23,7 @@ impl DynamicCast for dyn Reflect {
     }
 }
 
+/// Errors returned from the [GetValue] trait.
 #[derive(Error, Debug)]
 pub enum GetValueError {
     #[error("The field {0} doesn't exist on the reflected type {1}")]
@@ -29,6 +32,7 @@ pub enum GetValueError {
     FailedCast(String, String),
 }
 
+/// A utility trait for easily retrieving the value of a field from a [DynamicStruct].
 pub trait GetValue {
     /// Retrieves a reference to the given type from a field and unwraps immediately.
     /// Will panic if given the wrong type or the field doesn't exist.

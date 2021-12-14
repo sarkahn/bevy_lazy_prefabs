@@ -1,13 +1,10 @@
 use std::{any::TypeId, sync::Arc};
 
-use bevy::{
-    prelude::*,
-    reflect::DynamicStruct,
-};
+use bevy::{prelude::*, reflect::DynamicStruct};
 
 use derivative::*;
 
-use crate::{PrefabProcessor, commands::PrefabCommand};
+use crate::{commands::PrefabCommand, PrefabProcessor};
 
 #[derive(Derivative)]
 #[derivative(Debug)]
@@ -18,20 +15,13 @@ pub(crate) struct Prefab {
 }
 
 impl Prefab {
-    pub fn new(
-        name: Option<String>,
-        commands: Vec<PrefabCommand>,
-    ) -> Self {
-        Prefab {
-            name,
-            commands,
-        }
+    pub fn new(name: Option<String>, commands: Vec<PrefabCommand>) -> Self {
+        Prefab { name, commands }
     }
-
 
     pub fn commands(&self) -> &Vec<PrefabCommand> {
         &self.commands
-    } 
+    }
 }
 
 /// A name/value pair representing a field on a type
@@ -68,19 +58,20 @@ impl From<PrefabComponent> for ReflectField {
 
 impl PrefabComponent {
     pub fn new(
-        name: &str, 
-        root: Box<dyn Reflect>, 
+        name: &str,
+        root: Box<dyn Reflect>,
         reflect: ReflectComponent,
-        type_id: TypeId
+        type_id: TypeId,
     ) -> Self {
         PrefabComponent {
             name: name.to_string(),
             dynamic_value: root,
             reflect,
-            type_id
+            type_id,
         }
     }
 
+    #[allow(dead_code)]
     pub fn name(&self) -> &str {
         self.name.as_str()
     }
@@ -89,6 +80,7 @@ impl PrefabComponent {
         self.dynamic_value.as_ref()
     }
 
+    #[allow(dead_code)]
     pub fn root_mut(&mut self) -> &mut Box<dyn Reflect> {
         &mut self.dynamic_value
     }
@@ -114,8 +106,8 @@ pub(crate) struct PrefabProcessorData {
 
 impl PrefabProcessorData {
     pub fn new(
-        key: &str, 
-        properties: Option<DynamicStruct>, 
+        key: &str,
+        properties: Option<DynamicStruct>,
         processor: Arc<dyn PrefabProcessor + Send + Sync + 'static>,
     ) -> Self {
         Self {
@@ -125,6 +117,7 @@ impl PrefabProcessorData {
         }
     }
 
+    #[allow(dead_code)]
     pub fn key(&self) -> &str {
         self.key.as_str()
     }
@@ -133,7 +126,7 @@ impl PrefabProcessorData {
         self.properties.as_ref()
     }
 
-    pub fn processor(&self) -> &Arc<dyn PrefabProcessor + Send + Sync + 'static >{
+    pub fn processor(&self) -> &Arc<dyn PrefabProcessor + Send + Sync + 'static> {
         &self.processor
     }
 }
@@ -141,22 +134,16 @@ impl PrefabProcessorData {
 #[derive(Debug)]
 pub(crate) struct PrefabLoad {
     file_name: String,
-    mod_components: Option<Vec<PrefabComponent>>,
 }
 
 impl PrefabLoad {
-    pub fn new(name: &str, mod_components: Option<Vec<PrefabComponent>>) -> Self {
+    pub fn new(name: &str) -> Self {
         PrefabLoad {
             file_name: name.to_string(),
-            mod_components,
         }
     }
 
     pub fn path(&self) -> &str {
         self.file_name.as_str()
-    }
-
-    pub fn mod_components(&self) -> Option<&Vec<PrefabComponent>> {
-        self.mod_components.as_ref()
     }
 }

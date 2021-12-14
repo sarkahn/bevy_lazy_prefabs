@@ -34,7 +34,11 @@ color = ${ color_id ~ color_value }
 color_id = _{ "Color::" }
 color_value = { "BLUE" | "RED" | "GREEN" | "YELLOW" | "PINK" } 
 
-value = _{ vec2 | vec3 | float | int | color | char | string | range | array | component }
+shape = { shape_id ~ shape_type ~ ("{" ~ fields* ~ "}")? }
+shape_id = _{ ("s" | "S") ~ "hape::" }
+shape_type = { "Plane" | "Cube" | "Quad" }
+
+value = _{ shape | vec2 | vec3 | float | int | color | char | string | range | array | component }
 
 field = { field_name ~ ":" ~ value }
 fields = _{ field ~ ("," ~ field)* ~ ","? }

@@ -11,5 +11,5 @@ fn main() {
 
 fn setup(mut commands: Commands) {
     commands.spawn_prefab("sprite.prefab");
-    commands.spawn_prefab("camera.prefab");
+    commands.spawn_prefab("ortho_camera.prefab");
 }

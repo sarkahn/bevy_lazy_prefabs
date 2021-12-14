@@ -1,10 +1,12 @@
-use bevy::{prelude::*, render::{render_graph::base::MainPass, camera::{OrthographicProjection, Camera}}};
-
-use crate::{
-    PrefabRegistry, 
-    registry::PrefabRegisterProcessor, 
-    processor::*
+use bevy::{
+    prelude::*,
+    render::{
+        camera::{Camera, OrthographicProjection},
+        render_graph::base::MainPass,
+    },
 };
+
+use crate::{processor::*, registry::PrefabRegisterProcessor, PrefabRegistry};
 
 /// Default plugin, registers many built-in bevy types and bundles and includes
 /// prefab processors for common assets.
@@ -13,9 +15,9 @@ pub struct LazyPrefabsPlugin;
 impl Plugin for LazyPrefabsPlugin {
     fn build(&self, app: &mut AppBuilder) {
         app.add_plugin(LazyPrefabsMinimalPlugin)
-           .add_plugin(LazyPrefabsCommonTypesPlugin)
-           .add_plugin(LazyPrefabsBevy3DPlugin)
-           .add_plugin(LazyPrefabsBevy2DPlugin);
+            .add_plugin(LazyPrefabsCommonTypesPlugin)
+            .add_plugin(LazyPrefabsBevy3DPlugin)
+            .add_plugin(LazyPrefabsBevy2DPlugin);
     }
 }
 
@@ -55,6 +57,9 @@ impl Plugin for LazyPrefabsBevy3DPlugin {
         reg.register_type::<RenderPipelines>();
         reg.register_type::<Draw>();
         reg.register_type::<MainPass>();
+
+        app.init_prefab_processor::<PerspectiveCameraBundleProcessor>();
+        app.init_prefab_processor::<PbrBundleProcessor>();
     }
 }
 
