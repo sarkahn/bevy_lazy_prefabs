@@ -49,9 +49,9 @@
 //! use bevy::prelude::*;
 //! use bevy_lazy_prefabs::*;
 //! 
-//! fn setup(mut commands: Commands) {
-//!   commands.spawn_prefab("sprite.prefab");
-//!   commands.spawn_prefab("camera.prefab");
+//! fn setup(mut commands: Commands, mut registry: ResMut<PrefabRegistry>) {
+//!   commands.spawn_prefab("sprite.prefab", &mut registry);
+//!   commands.spawn_prefab("camera.prefab", &mut registry);
 //!  }
 //! ```
 
@@ -60,12 +60,17 @@ mod parse;
 mod plugin;
 mod prefab;
 mod registry;
+mod prefab_commands;
+
+mod v2;
 
 pub mod dynamic_cast;
 pub mod processor;
 
-pub use commands::SpawnPrefabCommands;
+//pub use commands::SpawnPrefabCommands;
+pub use commands::SpawnPrefabCommands2;
 pub use registry::PrefabRegisterType;
 pub use plugin::LazyPrefabsPlugin;
 pub use processor::PrefabProcessor;
 pub use registry::PrefabRegistry;
+pub use prefab_commands::PrefabLoader;

@@ -7,13 +7,16 @@ struct Pos {
     x: i32,
 }
 
-fn setup(mut commands: Commands) {
-    commands.spawn_prefab("ordered.prefab");
+fn setup(
+    mut commands: Commands,
+    mut registry: ResMut<PrefabRegistry>,
+) {
+    commands.spawn_prefab("ordered.prefab", &mut registry).unwrap();
 }
 
 fn check(q: Query<&Pos>) {
     for p in q.iter() {
-        assert_eq!(p.x, 5);
+        assert_eq!(p.x, 2);
     }
 }
 

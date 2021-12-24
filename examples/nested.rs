@@ -2,8 +2,8 @@ use bevy::prelude::*;
 use bevy_lazy_prefabs::*;
 
 fn setup(mut commands: Commands) {
-    commands.spawn_prefab("blue_bird.prefab");
-    commands.spawn_prefab("ortho_camera.prefab");
+   // commands.spawn_prefab("blue_bird.prefab");
+    //commands.spawn_prefab("ortho_camera.prefab");
 }
 
 fn main() {

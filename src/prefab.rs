@@ -1,25 +1,26 @@
 use std::{any::TypeId, sync::Arc};
 
-use bevy::{prelude::*, reflect::DynamicStruct};
+use bevy::{prelude::*, reflect::{DynamicStruct, TypeUuid}};
 
 use derivative::*;
 
 use crate::{commands::PrefabCommand, PrefabProcessor};
 
-#[derive(Derivative)]
+#[derive(Derivative, TypeUuid)]
 #[derivative(Debug)]
-pub(crate) struct Prefab {
+#[uuid = "6ea14da5-6bf8-3ea1-9886-1d7bf6c17d2f"]
+pub struct Prefab {
     name: Option<String>,
     #[derivative(Debug = "ignore")]
     commands: Vec<PrefabCommand>,
 }
 
 impl Prefab {
-    pub fn new(name: Option<String>, commands: Vec<PrefabCommand>) -> Self {
+    pub(crate) fn new(name: Option<String>, commands: Vec<PrefabCommand>) -> Self {
         Prefab { name, commands }
     }
 
-    pub fn commands(&self) -> &Vec<PrefabCommand> {
+    pub(crate) fn commands(&self) -> &Vec<PrefabCommand> {
         &self.commands
     }
 }

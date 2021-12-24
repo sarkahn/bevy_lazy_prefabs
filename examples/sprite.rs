@@ -9,7 +9,10 @@ fn main() {
         .run();
 }
 
-fn setup(mut commands: Commands) {
-    commands.spawn_prefab("sprite.prefab");
-    commands.spawn_prefab("ortho_camera.prefab");
+fn setup(
+    mut commands: Commands,
+    mut registry: ResMut<PrefabRegistry>
+) {
+    commands.spawn_prefab("sprite.prefab", &mut registry).unwrap();
+    commands.spawn_prefab("ortho_camera.prefab", &mut registry).unwrap();
 }

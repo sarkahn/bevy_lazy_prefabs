@@ -188,55 +188,25 @@ impl PrefabProcessor for PbrBundleProcessor {
 
     fn process_prefab(&self, properties: Option<&DynamicStruct>, world: &mut World, entity: Entity) {
         world.entity_mut(entity).insert_bundle(PbrBundle::default());
-
-        println!("Spawning pbr bundle");
         
         if let Some(mesh) = get_mesh(properties) {
-            println!("Inserting mesh handle");
             world.resource_scope(|world, mut meshes: Mut<Assets<Mesh>>| {
                 let handle = meshes.add(mesh);
                 world.entity_mut(entity).insert(handle);
             });
         }
-
-        // let (color,path) = get_material_props(properties);
-
-        // if color.is_none() && path.is_none() {
-        //     return;
-        // }
-
-        // let tex = match path {
-        //     Some(path) => {
-        //         let server = world.get_resource::<AssetServer>().unwrap();
-        //         Some(server.load(path.as_str()))
-        //     }
-        //     None => None
-        // };
-
-        // world.resource_scope(|world, mut materials: Mut<Assets<StandardMaterial>>| {
-        //     println!("Inserting material");
-        //     let mat = StandardMaterial {
-        //         base_color: color.cloned().unwrap_or_default(),
-        //         base_color_texture: tex,
-        //         ..Default::default()
-        //     };
-        //     let mat = materials.add(mat);
-        //     world.entity_mut(entity).insert(mat);
-        // });
     }
 }
 
 fn get_mesh(properties: Option<&DynamicStruct>) -> Option<Mesh> {
     if let Some(props) = properties {
         if let Ok(shape) = props.try_get::<String>("shape") {
-            println!("Found shape {}", shape);
             return match shape.as_str() {
                 "Plane" => {
                     let size = *props.try_get::<f32>("size").unwrap_or(&1.0);
                     Some(Mesh::from(shape::Plane { size }))
                 }
                 "Cube" => {
-                    println!("Setting mesh to cube");
                     let size = *props.try_get::<f32>("size").unwrap_or(&1.0);
                     Some(Mesh::from(shape::Cube { size }))
                 }
@@ -260,7 +230,6 @@ impl PrefabProcessor for PerspectiveCameraBundleProcessor {
     }
 
     fn process_prefab(&self, properties: Option<&DynamicStruct>, world: &mut World, entity: Entity) {
-        println!("Spawning camera");
         world.entity_mut(entity).insert_bundle(PerspectiveCameraBundle {
             transform: Transform::from_xyz(0.0,0.0,10.0),
             ..PerspectiveCameraBundle::new_3d()

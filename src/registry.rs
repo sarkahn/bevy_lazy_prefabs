@@ -1,3 +1,4 @@
+use crate::PrefabLoader;
 use crate::parse::{parse_prefab_string, LoadPrefabError, ReflectType};
 use crate::prefab::Prefab;
 use crate::processor::PrefabProcessor;
@@ -12,13 +13,14 @@ use bevy::{
     utils::HashMap,
 };
 
-/// Manages and caches various types of prefab data.
+/// Manages and caches prefab related data.
 #[derive(Default)]
 pub struct PrefabRegistry {
     type_info_map: HashMap<String, TypeInfo>,
     processors: HashMap<String, Arc<dyn PrefabProcessor + Send + Sync>>,
 
     prefab_map: HashMap<String, Arc<Prefab>>,
+    loaders: HashMap<String, Arc<dyn PrefabLoader + Send + Sync>>,
 }
 
 impl PrefabRegistry {
@@ -40,8 +42,7 @@ impl PrefabRegistry {
     /// Initialize a [PrefabProcessor] by type.
     pub fn init_processor<T: PrefabProcessor + Default + Send + Sync + 'static>(&mut self) {
         let p = T::default();
-        //self.processor_map.insert(p.key().to_string(), Box::new(p));
-        self.processors.insert(p.key().to_string(), Arc::new(p));
+        self.add_processor(Arc::new(p));
     }
 
     /// Add a [PrefabProcessor] to the registry.
@@ -68,7 +69,10 @@ impl PrefabRegistry {
     }
 
     /// Load the prefab from disk, or retrieve it if it's already been loaded.
-    pub(crate) fn try_load(&mut self, prefab_name: &str) -> Result<&Arc<Prefab>, LoadPrefabError> {
+    pub(crate) fn try_load(
+        &mut self, 
+        prefab_name: &str
+    ) -> Result<&Arc<Prefab>, LoadPrefabError> {
         // https://rust-lang.github.io/rfcs/2094-nll.html#problem-case-3-conditional-control-flow-across-functions
         if self.prefab_map.contains_key(prefab_name) {
             return Ok(self.prefab_map.get(prefab_name).unwrap())
@@ -89,23 +93,6 @@ impl PrefabRegistry {
         };
     }
 
-    /// Load a prefab from the given input string. 
-    /// 
-    /// If a prefab with the given name was previously loaded it will be overwritten.
-    pub(crate) fn load_from_string(&mut self,
-        prefab_name: &str,
-        input: &str
-    ) -> Result<&Arc<Prefab>, LoadPrefabError> {
-        match parse_prefab_string(input, self) {
-            Ok(prefab) => {
-                let prefab = Arc::new(prefab);
-                let entry = self.prefab_map.entry(prefab_name.to_string());
-                Ok(entry.or_insert(prefab))
-            }
-            Err(e) => Err(e),
-        }
-    }
-
     pub(crate) fn type_info(&self, type_name: &str) -> Option<&TypeInfo> {
         self.type_info_map.get(type_name)
     }
@@ -119,6 +106,10 @@ impl PrefabRegistry {
 
     pub(crate) fn get_prefab(&self, name: &str) -> Option<&Arc<Prefab>> {
         self.prefab_map.get(name)
+    }
+
+    pub(crate) fn get_loader(&self, name: &str) -> Option<&Arc<dyn PrefabLoader + Send + Sync + 'static>> {
+        self.loaders.get(name)
     }
 }
 
