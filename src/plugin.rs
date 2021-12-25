@@ -6,10 +6,7 @@ use bevy::{
     },
 };
 
-use crate::{
-    build_commands::*,
-    PrefabRegistry,
-};
+use crate::{build_commands::*, PrefabRegistry};
 
 /// Default plugin, registers many built-in bevy types and bundles and includes
 /// prefab commands for common assets.

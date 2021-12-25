@@ -1,11 +1,11 @@
 use bevy::{prelude::*, render::camera::OrthographicProjection};
 use bevy_lazy_prefabs::*;
 
-#[derive(Default,Reflect)]
+#[derive(Default, Reflect)]
 #[reflect(Component)]
 struct Equippable;
 
-#[derive(Default,Reflect)]
+#[derive(Default, Reflect)]
 #[reflect(Component)]
 struct Item;
 
@@ -33,10 +33,13 @@ fn setup(mut commands: Commands, mut registry: ResMut<PrefabRegistry>) {
     commands.spawn().insert_prefab(sword);
 
     let cam = registry.load("cam_2d.prefab").unwrap();
-    commands.spawn().insert_prefab(cam).insert(OrthographicProjection {
-        scale: 0.1,
-        ..Default::default()
-    });
+    commands
+        .spawn()
+        .insert_prefab(cam)
+        .insert(OrthographicProjection {
+            scale: 0.1,
+            ..Default::default()
+        });
 }
 
 fn read_damage(q_sword: Query<&DealsDamage>) {

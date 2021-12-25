@@ -7,16 +7,16 @@ use bevy::{
 use derivative::*;
 
 /// An asset built from a *.prefab* file.
-/// 
+///
 /// Prefabs can be retrieved from the [crate::PrefabRegistry] and applied to entities
 /// via [Commands].
-/// 
+///
 /// ## Example
-/// 
+///
 /// ```
 /// use bevy::prelude::*;
 /// use bevy_lazy_prefabs::*;
-/// 
+///
 /// fn setup(mut commands: Commands, mut registry: ResMut<PrefabRegistry>) {
 ///     let prefab = registry.load("some_prefab.prefab").unwrap();
 ///     commands.spawn().insert_prefab(prefab);

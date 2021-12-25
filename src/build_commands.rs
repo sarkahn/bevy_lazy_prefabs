@@ -188,9 +188,8 @@ impl BuildPrefabCommand for InsertSpriteBundle {
     }
 }
 
-
 /// Inserts a [PbrBundle].
-/// 
+///
 /// ### Optional Properties:
 ///
 /// - `shape` - The shape to use for the mesh. Accepts `shape::Cube`, `shape::Plane` or `shape::Quad`.
@@ -249,9 +248,9 @@ fn get_mesh(props: &DynamicStruct) -> Option<Mesh> {
 }
 
 /// Inserts an [OrthographicCameraBundle].
-/// 
+///
 /// # Optional Property
-/// 
+///
 /// - `scale` - Determines the scale of the orthographic projection.
 #[derive(Default)]
 pub struct InsertOrthographicCameraBundle;
@@ -273,11 +272,10 @@ impl BuildPrefabCommand for InsertOrthographicCameraBundle {
     }
 }
 
-
 /// Inserts a [PerspectiveCameraBundle].
-/// 
+///
 /// # Optional Properties
-/// 
+///
 /// - `position` - A `Vec3` that sets the intial position of the camera.
 /// - `looking_at` - A `Vec3` that determins where the camera is initially looking.
 #[derive(Default)]

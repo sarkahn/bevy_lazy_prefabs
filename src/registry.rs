@@ -7,7 +7,8 @@ use bevy::{
 };
 
 use crate::{
-    build_commands::BuildPrefabCommand, parse::parse_prefab_string, parse::LoadPrefabError, prefab::Prefab,
+    build_commands::BuildPrefabCommand, parse::parse_prefab_string, parse::LoadPrefabError,
+    prefab::Prefab,
 };
 
 /// Manages and caches [Prefab] related data.
@@ -20,26 +21,26 @@ pub struct PrefabRegistry {
 
 impl PrefabRegistry {
     /// Register a component for use in a [Prefab].
-    /// 
-    /// This must be called during setup on any component that gets loaded 
+    ///
+    /// This must be called during setup on any component that gets loaded
     /// from a *.prefab* file. Prefab components must derive `Default` and `Reflect`
     /// and have the `#[reflect(Component)]` attribute.
-    /// 
+    ///
     /// Note: Most built in bevy types are automatically registered during plugin
     /// initialization.
-    /// 
+    ///
     /// ## Example
-    /// 
+    ///
     /// ```
     /// use bevy::prelude::*;
     /// use bevy_lazy_prefabs::*;
-    /// 
+    ///
     /// #[derive(Default, Reflect)]
     /// #[reflect(Component)]
     /// struct MyComponent {
     ///     i: i32,
     /// }
-    /// 
+    ///
     /// fn setup(mut registry: ResMut<PrefabRegistry>) {
     ///     registry.register_type::<MyComponent>();
     /// }
@@ -59,16 +60,18 @@ impl PrefabRegistry {
     }
 
     /// Register a [BuildPrefabCommand] for use in a [Prefab].
-    /// 
+    ///
     /// This must be called during setup on any command that gets loaded
     /// from a *.prefab* file.
-    pub fn register_build_command<T: BuildPrefabCommand + Default + Send + Sync + 'static>(&mut self) {
+    pub fn register_build_command<T: BuildPrefabCommand + Default + Send + Sync + 'static>(
+        &mut self,
+    ) {
         let t = T::default();
         self.commands.insert(t.key().to_string(), Arc::new(t));
     }
-    
+
     /// Load the [Prefab] from disk, or retrieve it if it's already been loaded.
-    /// 
+    ///
     /// When first called for a prefab this will load it from disk and cache it internally.
     /// Future load calls for the same prefab will re-use this cached result.
     pub fn load(&mut self, name: &str) -> Result<&Arc<Prefab>, LoadPrefabError> {
@@ -93,13 +96,13 @@ impl PrefabRegistry {
         }
     }
 
-    /// Remove a cached [Prefab] from the registry. 
-    /// 
+    /// Remove a cached [Prefab] from the registry.
+    ///
     /// The next time the prefab is loaded it will be read from disk.
     pub fn unload_prefab(&mut self, name: &str) {
         self.prefabs.remove(name);
-    } 
-    
+    }
+
     pub(crate) fn get_build_command(
         &self,
         name: &str,

@@ -245,10 +245,18 @@ fn parse_value(pair: Pair<Rule>) -> Result<Box<dyn Reflect>, LoadPrefabError> {
                         let field = parse_field(pair).unwrap();
                         let val = field.value.cast_ref::<f32>();
                         match field.name.as_str() {
-                            "r" => { col.set_r(*val); },
-                            "g" => { col.set_g(*val); },
-                            "b" => { col.set_b(*val); },
-                            "a" => { col.set_a(*val); },
+                            "r" => {
+                                col.set_r(*val);
+                            }
+                            "g" => {
+                                col.set_g(*val);
+                            }
+                            "b" => {
+                                col.set_b(*val);
+                            }
+                            "a" => {
+                                col.set_a(*val);
+                            }
                             _ => {}
                         };
                     }
@@ -391,7 +399,9 @@ mod test {
     fn color_parse() {
         let input = "Color::RED";
         let parse = PrefabParser::parse(Rule::color, input)
-            .unwrap().next().unwrap();
+            .unwrap()
+            .next()
+            .unwrap();
 
         let parsed = parse_value(parse);
         let val = *parsed.unwrap().downcast::<Color>().unwrap();
@@ -400,8 +410,10 @@ mod test {
 
         let input = "Color { r: 1.0, g: 0.5 }";
         let parse = PrefabParser::parse(Rule::color, input)
-            .unwrap().next().unwrap();
-        
+            .unwrap()
+            .next()
+            .unwrap();
+
         let parsed = parse_value(parse);
         let col = *parsed.unwrap().downcast::<Color>().unwrap();
         assert_eq!(1.0, col.r());

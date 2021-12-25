@@ -16,4 +16,3 @@ fn setup(mut commands: Commands, mut registry: ResMut<PrefabRegistry>) {
     let cam = registry.load("cam2d.prefab").unwrap();
     commands.spawn().insert_prefab(cam);
 }
-

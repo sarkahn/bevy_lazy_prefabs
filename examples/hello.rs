@@ -15,9 +15,7 @@ fn setup(mut commands: Commands, mut registry: ResMut<PrefabRegistry>) {
     commands.spawn().insert_prefab(hello);
 }
 
-fn check(
-    query: Query<&Transform>,
-) {
+fn check(query: Query<&Transform>) {
     let t = query.single().unwrap();
     println!("Resulting position: {}", t.translation);
 }

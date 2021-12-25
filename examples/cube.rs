@@ -9,10 +9,7 @@ fn main() {
         .run();
 }
 
-fn setup(
-    mut commands: Commands, 
-    mut registry: ResMut<PrefabRegistry>, 
-) {
+fn setup(mut commands: Commands, mut registry: ResMut<PrefabRegistry>) {
     let prefab = registry.load("cube.prefab").unwrap();
     commands.spawn().insert_prefab(prefab);
 
