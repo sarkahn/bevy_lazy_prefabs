@@ -1,6 +1,0 @@
-{
-    TestComponentA,
-    TestComponentB {
-        x: 35,
-    },
-}

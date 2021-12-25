@@ -1,7 +1,0 @@
-{
-    load!(bird.prefab),
-    
-    processor!(ColorMaterial {
-        color: Color::BLUE,
-    }),
-}

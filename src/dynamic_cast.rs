@@ -1,4 +1,4 @@
-//! Utility traits for easily retrieving values from [Reflect] components. 
+//! Utility traits for easily retrieving values from [Reflect] components.
 
 use bevy::reflect::{DynamicStruct, GetTypeRegistration, Reflect, Struct};
 use thiserror::Error;

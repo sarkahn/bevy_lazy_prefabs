@@ -1,5 +1,0 @@
-{
-    processor!(SpriteBundle {
-        texture_path: "icon.png",
-    })
-}
