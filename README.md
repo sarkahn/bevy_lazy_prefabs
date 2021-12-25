@@ -1,3 +1,7 @@
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Crates.io](https://img.shields.io/crates/v/bevy_lazy_prefabs)](https://crates.io/crates/bevy_lazy_prefabs)
+[![docs](https://docs.rs/bevy_tiled_camera/badge.svg)](https://docs.rs/bevy_lazy_prefabs/)
+
 # Bevy Lazy Prefabs
 
 A crate for simple human readable/writable prefab text files in bevy.
