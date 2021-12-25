@@ -1,4 +1,4 @@
-use std::{sync::Arc, fs};
+use std::{fs, sync::Arc};
 
 use bevy::{
     prelude::*,
@@ -7,20 +7,26 @@ use bevy::{
 };
 
 use crate::{
-    commands::PrefabCommand, 
-    prefab::Prefab, 
-    parse::LoadPrefabError,
-    parse::parse_prefab_string,
+    build_commands::BuildPrefabCommand, parse::parse_prefab_string, parse::LoadPrefabError, prefab::Prefab,
 };
 
+/// Manages and caches [Prefab] related data.
 #[derive(Default)]
 pub struct PrefabRegistry {
     type_data: HashMap<String, TypeInfo>,
-    commands: HashMap<String, Arc<dyn PrefabCommand + Send + Sync + 'static>>,
+    commands: HashMap<String, Arc<dyn BuildPrefabCommand + Send + Sync + 'static>>,
     prefabs: HashMap<String, Arc<Prefab>>,
 }
 
 impl PrefabRegistry {
+    /// Register a component for use in a [Prefab].
+    /// 
+    /// This must be called during setup on any component that gets loaded 
+    /// from a *.prefab* file. Prefab components must have derive `Default` and `Reflect`
+    /// and have the `#[reflect(Component)]` attribute.
+    /// 
+    /// Note: Most built in bevy types are automatically registered during plugin
+    /// initialization.
     pub fn register_type<T: Reflect + GetTypeRegistration + Default>(&mut self) {
         let reg = T::get_type_registration();
         let instance = T::default();
@@ -35,28 +41,22 @@ impl PrefabRegistry {
         self.type_data.insert(name, info);
     }
 
-    pub(crate) fn get_type_data(&self, name: &str) -> Option<&TypeInfo> {
-        self.type_data.get(name)
-    }
-
-    pub fn register_command<T: PrefabCommand + Default + Send + Sync + 'static>(
-        &mut self,
-    ) {
+    /// Register a [PrefabCommand] for use in a [Prefab].
+    /// 
+    /// This must be called during setup on any command that gets loaded
+    /// from a *.prefab* file.
+    pub fn register_build_command<T: BuildPrefabCommand + Default + Send + Sync + 'static>(&mut self) {
         let t = T::default();
         self.commands.insert(t.key().to_string(), Arc::new(t));
     }
-
-    pub fn get_command(
-        &self,
-        name: &str,
-    ) -> Option<&Arc<dyn PrefabCommand + Send + Sync + 'static>> {
-        self.commands.get(name)
-    }
-
-    /// Load the prefab from disk, or retrieve it if it's already been loaded.
+    
+    /// Load the [Prefab] from disk, or retrieve it if it's already been loaded.
+    /// 
+    /// When first called for a prefab this will load it from disk and cache it internally.
+    /// Future load calls for the same prefab will re-use this cached result.
     pub fn load(&mut self, name: &str) -> Result<&Arc<Prefab>, LoadPrefabError> {
         if self.prefabs.contains_key(name) {
-            return Ok(self.prefabs.get(name).unwrap())
+            return Ok(self.prefabs.get(name).unwrap());
         };
 
         let path = ["assets/prefabs/", name].join("");
@@ -70,10 +70,28 @@ impl PrefabRegistry {
             Ok(prefab) => {
                 //let entry = self.prefab_map.entry(prefab_name.to_string());
                 let entry = self.prefabs.entry(name.to_string());
-                return Ok(entry.or_insert(Arc::new(prefab)));
+                Ok(entry.or_insert_with(|| Arc::new(prefab)))
             }
-            Err(e) => return Err(e),
-        };
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Remove a cached [Prefab] from the registry. 
+    /// 
+    /// The next time the prefab is loaded it will be read from disk.
+    pub fn unload_prefab(&mut self, name: &str) {
+        self.prefabs.remove(name);
+    } 
+    
+    pub(crate) fn get_build_command(
+        &self,
+        name: &str,
+    ) -> Option<&Arc<dyn BuildPrefabCommand + Send + Sync + 'static>> {
+        self.commands.get(name)
+    }
+
+    pub(crate) fn get_type_data(&self, name: &str) -> Option<&TypeInfo> {
+        self.type_data.get(name)
     }
 }
 
@@ -108,6 +126,4 @@ impl From<ReflectRef<'_>> for ReflectType {
 }
 
 #[cfg(test)]
-mod test {
-    
-}
+mod test {}

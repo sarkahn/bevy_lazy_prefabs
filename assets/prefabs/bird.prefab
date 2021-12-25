@@ -1,0 +1,3 @@
+{
+    InsertSpriteBundle!(texture_path: "icon.png"),
+}

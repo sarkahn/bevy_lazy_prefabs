@@ -1,0 +1,24 @@
+HelloWorld {                  // Prefab name is optional
+    Visible,                  // Prefab fields can be either components...    
+    InsertSpriteBundle!(),    // Or "BuildPrefabCommands".
+    Transform {               // Components can have fields
+        translation: Vec3 {   // Fields should be in name: value format.
+            x: 15.0           // Vecs and color support the expected fields
+        },                    // Omitted fields will be set to default
+    },                        // Commas are required between components
+    Transform {               // Components and build commands are applied in the order written
+        translation: Vec3 {   
+            y: 10.0           // This will override the previous transform
+        },
+    },
+    InsertPbrBundle!(                 // Build commands can optionally take fields as properties
+        texture_path: "alien.png",    // Which properties are used depends on the command.
+        color: Color::BLUE,           // Certain types support preset values
+    ),            
+    SetColorMaterial!(                // Some commands will be selective about what they override
+        color: Color::RED,            // Here we can set the material color without changing the texture
+    ),
+    InsertOrthographicCameraBundle!(  // Others aren't so selective. This will override the previously set Transform.
+        scale: 0.5,                 
+    ),
+}

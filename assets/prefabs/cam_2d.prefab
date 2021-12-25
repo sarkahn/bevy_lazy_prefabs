@@ -1,0 +1,3 @@
+{
+    InsertOrthographicCameraBundle!(scale: 0.25),
+}

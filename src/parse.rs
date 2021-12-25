@@ -1,8 +1,6 @@
 use bevy::{
     prelude::*,
-    reflect::{
-        DynamicList, DynamicStruct, DynamicTuple, DynamicTupleStruct, Reflect,
-    },
+    reflect::{DynamicList, DynamicStruct, DynamicTuple, DynamicTupleStruct, Reflect},
 };
 use pest::{error::Error, iterators::Pair, Parser};
 use pest_derive::*;
@@ -12,8 +10,8 @@ use thiserror::Error;
 use crate::{
     dynamic_cast::*,
     prefab::PrefabBuildStep,
-    registry::{ReflectType, TypeInfo, PrefabRegistry},
-    prefab::*, 
+    prefab::*,
+    registry::{PrefabRegistry, ReflectType, TypeInfo},
 };
 
 #[derive(Parser)]
@@ -58,7 +56,6 @@ pub(crate) fn parse_prefab_string(
     input: &str,
     registry: &mut PrefabRegistry,
 ) -> Result<Prefab, LoadPrefabError> {
-
     let mut parsed = PrefabParser::parse(Rule::prefab, input)?;
 
     parse_prefab(parsed.next().unwrap(), registry)
@@ -241,19 +238,36 @@ fn parse_value(pair: Pair<Rule>) -> Result<Box<dyn Reflect>, LoadPrefabError> {
             Ok(Box::new(v))
         }
         Rule::color => {
-            let pair = pair.into_inner().next().unwrap();
-            let value_string = pair.as_str();
-            let col = match value_string {
-                "RED" => Color::RED,
-                "BLUE" => Color::BLUE,
-                "GREEN" => Color::GREEN,
-                "YELLOW" => Color::YELLOW,
-                "PINK" => Color::PINK,
-                _ => {
-                    let str = format!("Color::{}", value_string);
-                    return Err(LoadPrefabError::UnhandledValueRule(str));
+            let mut col = Color::default();
+            for pair in pair.into_inner() {
+                match pair.as_rule() {
+                    Rule::field => {
+                        let field = parse_field(pair).unwrap();
+                        let val = field.value.cast_ref::<f32>();
+                        match field.name.as_str() {
+                            "r" => { col.set_r(*val); },
+                            "g" => { col.set_g(*val); },
+                            "b" => { col.set_b(*val); },
+                            "a" => { col.set_a(*val); },
+                            _ => {}
+                        };
+                    }
+                    Rule::color_value => {
+                        col = match pair.as_str() {
+                            "RED" => Color::RED,
+                            "BLUE" => Color::BLUE,
+                            "GREEN" => Color::GREEN,
+                            "YELLOW" => Color::YELLOW,
+                            "PINK" => Color::PINK,
+                            _ => {
+                                let str = format!("Color::{}", value_string);
+                                return Err(LoadPrefabError::UnhandledValueRule(str));
+                            }
+                        };
+                    }
+                    _ => unreachable!(),
                 }
-            };
+            }
             Ok(Box::new(col))
         }
         Rule::shape => {
@@ -294,7 +308,7 @@ fn parse_command(pair: Pair<Rule>) -> Result<PrefabCommandData, LoadPrefabError>
 #[cfg(test)]
 mod test {
     use bevy::prelude::*;
-    
+
     use pest::Parser;
 
     use crate::dynamic_cast::*;
@@ -305,7 +319,6 @@ mod test {
         dynamic_cast::GetValue,
         parse::{parse_component, parse_value, PrefabParser, Rule},
     };
-    
 
     use super::{parse_command, parse_field, parse_string};
 
@@ -335,7 +348,7 @@ mod test {
         reg.register_type::<Visible>();
         reg.register_type::<Draw>();
 
-        let prefab = parse_prefab(parsed.next().unwrap(), &mut reg).unwrap();
+        let prefab = parse_prefab(parsed.next().unwrap(), &reg).unwrap();
 
         assert_eq!(prefab.name, Some("SomeName".to_string()));
 
@@ -343,20 +356,20 @@ mod test {
             PrefabBuildStep::AddComponent(_) => unreachable!(),
             PrefabBuildStep::RunCommand(command) => {
                 assert_eq!(command.name, "dosomething");
-            },
+            }
         }
 
         match &prefab.steps[1] {
             PrefabBuildStep::AddComponent(comp) => {
                 assert_eq!(comp.type_name, "Visible");
-            },
+            }
             PrefabBuildStep::RunCommand(_) => unreachable!(),
         }
 
         match &prefab.steps[2] {
             PrefabBuildStep::AddComponent(comp) => {
                 assert_eq!(comp.type_name, "Draw");
-            },
+            }
             PrefabBuildStep::RunCommand(_) => unreachable!(),
         }
     }
@@ -378,13 +391,21 @@ mod test {
     fn color_parse() {
         let input = "Color::RED";
         let parse = PrefabParser::parse(Rule::color, input)
-            .unwrap()
-            .next()
-            .unwrap();
+            .unwrap().next().unwrap();
+
         let parsed = parse_value(parse);
         let val = *parsed.unwrap().downcast::<Color>().unwrap();
 
         assert_eq!(Color::RED, val);
+
+        let input = "Color { r: 1.0, g: 0.5 }";
+        let parse = PrefabParser::parse(Rule::color, input)
+            .unwrap().next().unwrap();
+        
+        let parsed = parse_value(parse);
+        let col = *parsed.unwrap().downcast::<Color>().unwrap();
+        assert_eq!(1.0, col.r());
+        assert_eq!(0.5, col.g());
     }
 
     #[test]
@@ -424,7 +445,7 @@ mod test {
             .next()
             .unwrap();
 
-        let comp = parse_component(parsed, &mut reg).unwrap();
+        let comp = parse_component(parsed, &reg).unwrap();
 
         let mut transform = Transform::default();
 

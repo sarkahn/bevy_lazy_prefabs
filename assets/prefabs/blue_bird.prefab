@@ -1,0 +1,4 @@
+{
+    LoadPrefab!(name: "bird.prefab"),
+    SetColorMaterial!(color: Color::BLUE),
+}

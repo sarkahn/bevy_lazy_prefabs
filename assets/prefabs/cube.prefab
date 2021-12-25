@@ -1,0 +1,7 @@
+{
+    InsertPbrBundle!(
+        shape: shape::Cube, 
+        size: 2.0,
+        color: Color::GREEN,
+    ),
+}

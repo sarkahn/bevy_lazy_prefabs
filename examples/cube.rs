@@ -9,11 +9,13 @@ fn main() {
         .run();
 }
 
-fn setup(mut commands: Commands, mut registry: ResMut<PrefabRegistry>) {
-    let sprite = registry.load("sprite.prefab").unwrap();
-    commands.spawn().insert_prefab(sprite);
+fn setup(
+    mut commands: Commands, 
+    mut registry: ResMut<PrefabRegistry>, 
+) {
+    let prefab = registry.load("cube.prefab").unwrap();
+    commands.spawn().insert_prefab(prefab);
 
-    let cam = registry.load("cam2d.prefab").unwrap();
+    let cam = registry.load("cam_3d.prefab").unwrap();
     commands.spawn().insert_prefab(cam);
 }
-

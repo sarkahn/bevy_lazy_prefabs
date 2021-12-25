@@ -38,7 +38,7 @@ pub trait GetValue {
     /// Will panic if given the wrong type or the field doesn't exist.
     fn get<T: Reflect>(&self, field_name: &str) -> &T;
 
-    /// Tries to retrieve a reference to the given type.
+    /// Tries to retrieve a reference to the field value of the given type.
     fn try_get<T: Reflect + GetTypeRegistration>(
         &self,
         field_name: &str,

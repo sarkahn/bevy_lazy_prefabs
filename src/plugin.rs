@@ -1,11 +1,18 @@
 use bevy::{
-    prelude::*, render::{camera::{Camera, OrthographicProjection}, render_graph::base::MainPass},
+    prelude::*,
+    render::{
+        camera::{Camera, OrthographicProjection},
+        render_graph::base::MainPass,
+    },
 };
 
-use crate::{PrefabRegistry, commands::{AddColorMaterial, InsertSpriteBundle, LoadPrefab}};
+use crate::{
+    build_commands::*,
+    PrefabRegistry,
+};
 
 /// Default plugin, registers many built-in bevy types and bundles and includes
-/// prefab processors for common assets.
+/// prefab commands for common assets.
 pub struct LazyPrefabsPlugin;
 
 impl Plugin for LazyPrefabsPlugin {
@@ -39,7 +46,7 @@ impl Plugin for LazyPrefabsCommonTypesPlugin {
         reg.register_type::<Vec2>();
         reg.register_type::<Camera>();
 
-        reg.register_command::<LoadPrefab>();
+        reg.register_build_command::<LoadPrefab>();
     }
 }
 
@@ -56,6 +63,8 @@ impl Plugin for LazyPrefabsBevy3DPlugin {
         reg.register_type::<Draw>();
         reg.register_type::<MainPass>();
 
+        reg.register_build_command::<InsertPbrBundle>();
+        reg.register_build_command::<InsertPerspectiveCameraBundle>();
     }
 }
 
@@ -72,10 +81,8 @@ impl Plugin for LazyPrefabsBevy2DPlugin {
         reg.register_type::<Handle<ColorMaterial>>();
         reg.register_type::<Handle<TextureAtlas>>();
 
-        reg.register_command::<AddColorMaterial>();
-        reg.register_command::<InsertSpriteBundle>();
-        //app.init_prefab_processor::<ColorMaterialProcessor>();
-        //app.init_prefab_processor::<OrthographicCameraBundleProcessor>();
-        //app.init_prefab_processor::<SpriteBundleProcessor>();
+        reg.register_build_command::<SetColorMaterial>();
+        reg.register_build_command::<InsertSpriteBundle>();
+        reg.register_build_command::<InsertOrthographicCameraBundle>();
     }
 }

@@ -11,17 +11,14 @@ use crate::{
 };
 
 pub trait SpawnPrefabCommands {
-    fn insert_prefab(
-        &mut self,
-        prefab: &Prefab,
-    ) -> &mut Self;
+    /// Apply [Prefab] components and commands to an entity.
+    /// 
+    /// Prefabs can be loaded from the [PrefabRegistry].
+    fn insert_prefab(&mut self, prefab: &Prefab) -> &mut Self;
 }
 
-impl<'a, 'b> SpawnPrefabCommands for EntityCommands<'a, 'b> {
-    fn insert_prefab(
-        &mut self,
-        prefab: &Prefab,
-    ) -> &mut Self {
+impl SpawnPrefabCommands for EntityCommands<'_, '_> {
+    fn insert_prefab(&mut self, prefab: &Prefab) -> &mut Self {
         let id = self.id();
         for step in prefab.steps.iter() {
             match step {
@@ -30,13 +27,13 @@ impl<'a, 'b> SpawnPrefabCommands for EntityCommands<'a, 'b> {
                         entity: id,
                         component: comp.clone(),
                     });
-                },
+                }
                 crate::prefab::PrefabBuildStep::RunCommand(command) => {
                     self.commands().add(PrefabProcessCommand {
                         entity: id,
                         data: command.clone(),
                     });
-                },
+                }
             }
         }
 
@@ -86,9 +83,12 @@ impl Command for PrefabProcessCommand {
         let data = self.data;
         let command_name = data.name.as_str();
 
-        world.resource_scope(|world, registry: Mut<PrefabRegistry>| {
-            let command = registry.get_command(command_name).unwrap().clone();
-            command.run(data.properties.as_ref(), world, entity);
-        });
+        let reg = world.get_resource::<PrefabRegistry>().unwrap();
+        let command = reg.get_build_command(command_name).unwrap_or_else(|| panic!(
+            "Error performing prefab command {}. Was it registered in the PrefabRegistry?", command_name
+        ));
+
+        let command = command.clone();
+        command.run(data.properties.as_ref(), world, entity);
     }
 }

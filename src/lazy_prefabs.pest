@@ -11,8 +11,10 @@ char = { "'" ~
 (LETTER | PUNCTUATION | SYMBOL | ASCII_DIGIT)
 ~ "'" }
 
-vec2 = { "Vec2" ~ "{" ~ fields ~ "}" }
-vec3 = { "Vec3" ~ "{" ~ fields ~ "}" }  
+default = { "::default()" }
+
+vec2 = { "Vec2" ~ braced_fields? }
+vec3 = { "Vec3" ~ braced_fields? }  
 
 string_inner = _{ (!"\"" ~ (LETTER | NUMBER | SYMBOL | PUNCTUATION))* }
 inner_silent = @{ string_inner }
@@ -29,18 +31,19 @@ field_name = @{ id_letter ~ (id_letter | NUMBER )* }
 prefab_name = @{ id_letter ~ (id_letter | NUMBER )* }
 file_name = @{ type_name ~ "." ~ type_name } 
 
-color = ${ color_id ~ color_value }
-color_id = _{ "Color::" }
+color = { "Color" ~ ( braced_fields | color_presets )? }
+color_presets = _{  "::" ~ color_value }
 color_value = { "BLUE" | "RED" | "GREEN" | "YELLOW" | "PINK" } 
 
 shape = { shape_id ~ shape_type ~ ("{" ~ fields* ~ "}")? }
 shape_id = _{ ("s" | "S") ~ "hape::" }
 shape_type = { "Plane" | "Cube" | "Quad" }
 
-value = _{ shape | vec2 | vec3 | float | int | color | char | string | range | array | component }
+value = _{ shape | vec2 | vec3 | float | int | color | char | string | range | array }
 
 field = { field_name ~ ":" ~ value }
 fields = _{ field ~ ("," ~ field)* ~ ","? }
+braced_fields = _{ "{" ~ fields ~ "}" }
 
 component = { (type_name ~ component_fields*) }
 component_field = _{ (field | component) }
@@ -57,3 +60,4 @@ prefab_fields = _{ prefab_field ~ ("," ~ prefab_field)* ~ ","? }
 command = { type_name ~ "!(" ~ fields* ~ ")" }
  
 WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
+COMMENT = _{ "//" ~ (!NEWLINE ~ ANY)* ~ NEWLINE }

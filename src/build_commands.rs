@@ -1,16 +1,14 @@
-use std::sync::Arc;
-
 use bevy::{prelude::*, reflect::DynamicStruct};
 
-use crate::{dynamic_cast::*, PrefabRegistry, prefab::{PrefabBuildStep, PrefabComponent}};
+use crate::{dynamic_cast::*, PrefabRegistry};
 
-/// A prefab command for handling more complex prefab entity initialization.
-/// 
-/// A prefab command can perform complex initialization on prefab entities that can't
+/// A build command for handling more complex prefab entity initialization.
+///
+/// A build command can perform complex initialization on prefab entities that can't
 /// reasonably be handled from a text file. This includes things like inserting bundles,
 /// loading handles for meshes and materials, and initializing any other kind of asset or
 /// property that requires external data.
-pub trait PrefabCommand {
+pub trait BuildPrefabCommand {
     /// Process and modify the prefab entity as needed.
     ///
     /// ### Arguments
@@ -18,14 +16,14 @@ pub trait PrefabCommand {
     ///  - `properties` - An optional  [DynamicStruct] containing any properties read
     /// from the *.prefab* file. [None] if no properties were receieved.
     ///  - `entity` - The prefab entity, to be modified as needed.
-    /// 
-    /// ### Example 
-    /// 
+    ///
+    /// ### Example
+    ///
     /// ```ignore
     /// struct Name {
     ///     value: String,
     /// }
-    /// 
+    ///
     /// // Insert a name component whose value is receieved from a *.prefab* file.
     /// pub fn process_prefab(&self, properties: Option<&DynamicStruct>, world: &mut World, entity: Entity) {
     ///     if let Some(props) = properties {
@@ -36,21 +34,21 @@ pub trait PrefabCommand {
     /// }
     /// ```
     fn run(&self, properties: Option<&DynamicStruct>, world: &mut World, entity: Entity);
-    
-    /// The key for this processor. This is the name you refer to the processor by
+
+    /// The key for this command. This is the name you refer to the command by
     /// from your *.prefab* file.
     fn key(&self) -> &str;
 }
 
-/// Adds a [ColorMaterial] to the entity.
+/// Sets [ColorMaterial] values on the entity.
 ///
 /// ### Optional Properties:
 ///
 /// - `color` - The color for the material.
 /// - `texture_path` - The path to the texture for the material.
 #[derive(Default)]
-pub struct AddColorMaterial;
-impl PrefabCommand for AddColorMaterial {
+pub struct SetColorMaterial;
+impl BuildPrefabCommand for SetColorMaterial {
     fn run(&self, properties: Option<&DynamicStruct>, world: &mut World, entity: Entity) {
         let (color, path) = get_material_props(properties);
 
@@ -60,7 +58,7 @@ impl PrefabCommand for AddColorMaterial {
                 let mat = materials.get_mut(existing_mat).unwrap();
 
                 if let Some(col) = color {
-                    mat.color = col.clone();
+                    mat.color = *col;
                 }
                 if let Some(path) = path {
                     let server = world.get_resource::<AssetServer>().unwrap();
@@ -68,15 +66,11 @@ impl PrefabCommand for AddColorMaterial {
                     mat.texture = Some(tex);
                 }
             });
-        } else {
-            let handle = get_material(world, (color, path)).unwrap_or_default();
-
-            world.entity_mut(entity).insert(handle);
         }
     }
 
     fn key(&self) -> &str {
-        "AddColorMaterial"
+        "SetColorMaterial"
     }
 }
 
@@ -90,7 +84,7 @@ fn get_material_props(properties: Option<&DynamicStruct>) -> (Option<&Color>, Op
     (None, None)
 }
 
-fn get_material(
+fn get_color_material(
     world: &mut World,
     material_props: (Option<&Color>, Option<&String>),
 ) -> Option<Handle<ColorMaterial>> {
@@ -99,7 +93,7 @@ fn get_material(
     let tex: Option<Handle<Texture>> = match path {
         Some(path) => {
             let server = world.get_resource::<AssetServer>().unwrap();
-            Some(server.load(path.as_str()).clone())
+            Some(server.load(path.as_str()))
         }
         None => None,
     };
@@ -113,7 +107,7 @@ fn get_material(
         texture: tex,
         color: col.cloned().unwrap_or_default(),
     };
-    return Some(materials.add(mat));
+    Some(materials.add(mat))
 }
 
 /// Loads a prefab and applies it's components/commands to the entity.
@@ -123,7 +117,7 @@ fn get_material(
 /// - `name` - The name of the prefab, including the extension.
 #[derive(Default)]
 pub struct LoadPrefab;
-impl PrefabCommand for LoadPrefab {
+impl BuildPrefabCommand for LoadPrefab {
     fn run(&self, properties: Option<&DynamicStruct>, world: &mut World, entity: Entity) {
         if let Some(props) = properties {
             if let Ok(name) = props.try_get::<String>("name") {
@@ -138,13 +132,11 @@ impl PrefabCommand for LoadPrefab {
                                     .get_type_data(comp.type_name.as_str())
                                     .unwrap()
                                     .registration;
-                                let type_id = reg.type_id().clone();
-                    
+                                let type_id = reg.type_id();
                                 let reflect = match reg.data::<ReflectComponent>() {
                                     Some(reflect) => reflect,
                                     None => panic!("Error reading reflect data. Does the type {} have the '#[reflect(Component)]' attribute?", reg.short_name()),
                                 }.clone();
-                        
                                 if world.entity(entity).contains_type_id(type_id) {
                                     reflect.apply_component(world, entity, &*comp.reflect);
                                 } else {
@@ -152,7 +144,7 @@ impl PrefabCommand for LoadPrefab {
                                 }
                             },
                             crate::prefab::PrefabBuildStep::RunCommand(data) => {
-                                let cmd = reg.get_command(data.name.as_str()).unwrap();
+                                let cmd = reg.get_build_command(data.name.as_str()).unwrap();
 
                                 cmd.run(data.properties.as_ref(), world, entity);
                             },
@@ -176,10 +168,10 @@ impl PrefabCommand for LoadPrefab {
 /// - `texture_path` - The path to the texture for the material.
 #[derive(Default)]
 pub struct InsertSpriteBundle;
-impl PrefabCommand for InsertSpriteBundle {
+impl BuildPrefabCommand for InsertSpriteBundle {
     fn run(&self, properties: Option<&DynamicStruct>, world: &mut World, entity: Entity) {
-        let (color,path) = get_material_props(properties);
-        let mat = get_material(world, (color,path));
+        let (color, path) = get_material_props(properties);
+        let mat = get_color_material(world, (color, path));
 
         let mut entity = world.entity_mut(entity);
         entity.insert_bundle(SpriteBundle {
@@ -190,5 +182,121 @@ impl PrefabCommand for InsertSpriteBundle {
 
     fn key(&self) -> &str {
         "InsertSpriteBundle"
+    }
+}
+
+
+/// Inserts a [PbrBundle].
+/// 
+/// ### Optional Properties:
+///
+/// - `shape` - The shape to use for the mesh. Accepts `shape::Cube`, `shape::Plane` or `shape::Quad`.
+/// - `size` - For a Cube or Plane the size is a single `f32`. For a Quad the size is a `Vec2`.
+/// - `flip` - A `bool` that determines the texture coordinates on a [shape::Quad].
+#[derive(Default)]
+pub struct InsertPbrBundle;
+impl BuildPrefabCommand for InsertPbrBundle {
+    fn run(&self, properties: Option<&DynamicStruct>, world: &mut World, entity: Entity) {
+        let mut bundle = PbrBundle::default();
+
+        if let Some(properties) = properties {
+            if let Some(mesh) = get_mesh(properties) {
+                world.resource_scope(|_, mut meshes: Mut<Assets<Mesh>>| {
+                    let handle = meshes.add(mesh);
+                    bundle.mesh = handle;
+                });
+            }
+
+            if let Ok(color) = properties.try_get::<Color>("color") {
+                world.resource_scope(|_, mut materials: Mut<Assets<StandardMaterial>>| {
+                    let mat = materials.add(StandardMaterial::from(*color));
+                    bundle.material = mat;
+                });
+            }
+        }
+
+        world.entity_mut(entity).insert_bundle(bundle);
+    }
+
+    fn key(&self) -> &str {
+        "InsertPbrBundle"
+    }
+}
+
+fn get_mesh(props: &DynamicStruct) -> Option<Mesh> {
+    if let Ok(shape) = props.try_get::<String>("shape") {
+        return match shape.as_str() {
+            "Plane" => {
+                let size = *props.try_get::<f32>("size").unwrap_or(&1.0);
+                Some(Mesh::from(shape::Plane { size }))
+            }
+            "Cube" => {
+                let size = *props.try_get::<f32>("size").unwrap_or(&1.0);
+                Some(Mesh::from(shape::Cube { size }))
+            }
+            "Quad" => {
+                let size = *props.try_get::<Vec2>("size").unwrap_or(&Vec2::ONE);
+                let flip = *props.try_get::<bool>("flip").unwrap_or(&false);
+                Some(Mesh::from(shape::Quad { size, flip }))
+            }
+            _ => None,
+        };
+    }
+    None
+}
+
+/// Inserts an [OrthographicCameraBundle].
+/// 
+/// # Optional Property
+/// 
+/// - `scale` - Determines the scale of the orthographic projection.
+#[derive(Default)]
+pub struct InsertOrthographicCameraBundle;
+impl BuildPrefabCommand for InsertOrthographicCameraBundle {
+    fn run(&self, properties: Option<&DynamicStruct>, world: &mut World, entity: Entity) {
+        let mut bundle = OrthographicCameraBundle::new_2d();
+
+        if let Some(props) = properties {
+            if let Ok(scale) = props.try_get::<f32>("scale") {
+                bundle.orthographic_projection.scale = *scale;
+            }
+        }
+
+        world.entity_mut(entity).insert_bundle(bundle);
+    }
+
+    fn key(&self) -> &str {
+        "InsertOrthographicCameraBundle"
+    }
+}
+
+
+/// Inserts a [PerspectiveCameraBundle].
+/// 
+/// # Optional Properties
+/// 
+/// - `position` - A `Vec3` that sets the intial position of the camera.
+/// - `looking_at` - A `Vec3` that determins where the camera is initially looking.
+#[derive(Default)]
+pub struct InsertPerspectiveCameraBundle;
+impl BuildPrefabCommand for InsertPerspectiveCameraBundle {
+    fn run(&self, properties: Option<&DynamicStruct>, world: &mut World, entity: Entity) {
+        let mut bundle = PerspectiveCameraBundle::new_3d();
+
+        if let Some(props) = properties {
+            if let Ok(position) = props.try_get::<Vec3>("position") {
+                bundle.transform.translation = *position;
+            }
+
+            if let Ok(looking_at) = props.try_get::<Vec3>("looking_at") {
+                bundle.transform = bundle.transform.looking_at(*looking_at, Vec3::Y);
+            }
+        }
+
+        world.entity_mut(entity).insert_bundle(bundle);
+    }
+
+    fn key(&self) -> &str {
+        "InsertPerspectiveCameraBundle"
     }
 }
