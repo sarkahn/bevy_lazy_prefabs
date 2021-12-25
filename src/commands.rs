@@ -1,12 +1,54 @@
+use std::sync::Arc;
+
 use bevy::{prelude::*, reflect::DynamicStruct};
 
-use crate::dynamic_cast::*;
+use crate::{dynamic_cast::*, PrefabRegistry, prefab::{PrefabBuildStep, PrefabComponent}};
 
+/// A prefab command for handling more complex prefab entity initialization.
+/// 
+/// A prefab command can perform complex initialization on prefab entities that can't
+/// reasonably be handled from a text file. This includes things like inserting bundles,
+/// loading handles for meshes and materials, and initializing any other kind of asset or
+/// property that requires external data.
 pub trait PrefabCommand {
+    /// Process and modify the prefab entity as needed.
+    ///
+    /// ### Arguments
+    ///
+    ///  - `properties` - An optional  [DynamicStruct] containing any properties read
+    /// from the *.prefab* file. [None] if no properties were receieved.
+    ///  - `entity` - The prefab entity, to be modified as needed.
+    /// 
+    /// ### Example 
+    /// 
+    /// ```ignore
+    /// struct Name {
+    ///     value: String,
+    /// }
+    /// 
+    /// // Insert a name component whose value is receieved from a *.prefab* file.
+    /// pub fn process_prefab(&self, properties: Option<&DynamicStruct>, world: &mut World, entity: Entity) {
+    ///     if let Some(props) = properties {
+    ///         if let Ok(name) = props.try_get::<String>("name") {
+    ///             world.entity_mut(entity).insert(Name { value: name.clone() });
+    ///         }
+    ///     }
+    /// }
+    /// ```
     fn run(&self, properties: Option<&DynamicStruct>, world: &mut World, entity: Entity);
+    
+    /// The key for this processor. This is the name you refer to the processor by
+    /// from your *.prefab* file.
     fn key(&self) -> &str;
 }
 
+/// Adds a [ColorMaterial] to the entity.
+///
+/// ### Optional Properties:
+///
+/// - `color` - The color for the material.
+/// - `texture_path` - The path to the texture for the material.
+#[derive(Default)]
 pub struct AddColorMaterial;
 impl PrefabCommand for AddColorMaterial {
     fn run(&self, properties: Option<&DynamicStruct>, world: &mut World, entity: Entity) {
@@ -74,11 +116,79 @@ fn get_material(
     return Some(materials.add(mat));
 }
 
+/// Loads a prefab and applies it's components/commands to the entity.
+///
+/// ### Required Property:
+///
+/// - `name` - The name of the prefab, including the extension.
+#[derive(Default)]
 pub struct LoadPrefab;
 impl PrefabCommand for LoadPrefab {
-    fn run(&self, properties: Option<&DynamicStruct>, world: &mut World, entity: Entity) {}
+    fn run(&self, properties: Option<&DynamicStruct>, world: &mut World, entity: Entity) {
+        if let Some(props) = properties {
+            if let Ok(name) = props.try_get::<String>("name") {
+                world.resource_scope(|world, mut reg: Mut<PrefabRegistry>| {
+
+                    let prefab = reg.load(name.as_str()).unwrap().clone();
+
+                    for step in prefab.steps.iter() {
+                        match step {
+                            crate::prefab::PrefabBuildStep::AddComponent(comp) => {
+                                let reg = &reg
+                                    .get_type_data(comp.type_name.as_str())
+                                    .unwrap()
+                                    .registration;
+                                let type_id = reg.type_id().clone();
+                    
+                                let reflect = match reg.data::<ReflectComponent>() {
+                                    Some(reflect) => reflect,
+                                    None => panic!("Error reading reflect data. Does the type {} have the '#[reflect(Component)]' attribute?", reg.short_name()),
+                                }.clone();
+                        
+                                if world.entity(entity).contains_type_id(type_id) {
+                                    reflect.apply_component(world, entity, &*comp.reflect);
+                                } else {
+                                    reflect.add_component(world, entity, &*comp.reflect);
+                                }
+                            },
+                            crate::prefab::PrefabBuildStep::RunCommand(data) => {
+                                let cmd = reg.get_command(data.name.as_str()).unwrap();
+
+                                cmd.run(data.properties.as_ref(), world, entity);
+                            },
+                        }
+                    }
+                });
+            }
+        }
+    }
 
     fn key(&self) -> &str {
-        todo!()
+        "LoadPrefab"
+    }
+}
+
+/// Inserts a sprite bundle.
+///
+/// ### Optional Properties:
+///
+/// - `color` - The color for the material.
+/// - `texture_path` - The path to the texture for the material.
+#[derive(Default)]
+pub struct InsertSpriteBundle;
+impl PrefabCommand for InsertSpriteBundle {
+    fn run(&self, properties: Option<&DynamicStruct>, world: &mut World, entity: Entity) {
+        let (color,path) = get_material_props(properties);
+        let mat = get_material(world, (color,path));
+
+        let mut entity = world.entity_mut(entity);
+        entity.insert_bundle(SpriteBundle {
+            material: mat.unwrap_or_default(),
+            ..Default::default()
+        });
+    }
+
+    fn key(&self) -> &str {
+        "InsertSpriteBundle"
     }
 }

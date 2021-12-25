@@ -10,10 +10,11 @@ use derivative::*;
 #[derivative(Debug)]
 #[uuid = "6ea14da5-6bf8-3ea1-9886-1d7bf6c17d2f"]
 pub struct Prefab {
+    pub name: Option<String>,
     pub steps: Vec<PrefabBuildStep>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum PrefabBuildStep {
     AddComponent(Arc<PrefabComponent>),
     RunCommand(Arc<PrefabCommandData>),
@@ -28,7 +29,7 @@ pub struct PrefabComponent {
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct PrefabCommandData {
-    pub command_name: String,
+    pub name: String,
     #[derivative(Debug = "ignore")]
     pub properties: Option<DynamicStruct>,
 }

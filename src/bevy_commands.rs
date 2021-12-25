@@ -10,34 +10,38 @@ use crate::{
     PrefabRegistry,
 };
 
-pub trait SpawnPrefabCommands<'a> {
-    fn spawn_prefab<'b>(
-        &'b mut self,
-        prefab: Handle<Prefab>,
-        registry: &PrefabRegistry,
-    ) -> EntityCommands<'a, 'b>;
+pub trait SpawnPrefabCommands {
+    fn insert_prefab(
+        &mut self,
+        prefab: &Prefab,
+    ) -> &mut Self;
 }
-impl<'a> SpawnPrefabCommands<'a> for Commands<'a> {
-    fn spawn_prefab<'b>(
-        &'b mut self,
-        prefab: Handle<Prefab>,
-        registry: &PrefabRegistry,
-    ) -> EntityCommands<'a, 'b> {
-        let mut entity = self.spawn();
-        let id = entity.id();
 
-        entity.insert(LoadPrefabCommand {
-            entity: id,
-            handle: prefab,
-        });
+impl<'a, 'b> SpawnPrefabCommands for EntityCommands<'a, 'b> {
+    fn insert_prefab(
+        &mut self,
+        prefab: &Prefab,
+    ) -> &mut Self {
+        let id = self.id();
+        for step in prefab.steps.iter() {
+            match step {
+                crate::prefab::PrefabBuildStep::AddComponent(comp) => {
+                    self.commands().add(AddComponentCommand {
+                        entity: id,
+                        component: comp.clone(),
+                    });
+                },
+                crate::prefab::PrefabBuildStep::RunCommand(command) => {
+                    self.commands().add(PrefabProcessCommand {
+                        entity: id,
+                        data: command.clone(),
+                    });
+                },
+            }
+        }
 
-        entity
+        self
     }
-}
-
-struct LoadPrefabCommand {
-    entity: Entity,
-    handle: Handle<Prefab>,
 }
 
 struct AddComponentCommand {
@@ -60,7 +64,7 @@ impl Command for AddComponentCommand {
 
         let reflect = match reg.data::<ReflectComponent>() {
             Some(reflect) => reflect,
-            None => panic!("Error reading reflect data. Does the  type {} have the '#[reflect(Component)]' attribute?", reg.short_name()),
+            None => panic!("Error reading reflect data. Does the type {} have the '#[reflect(Component)]' attribute?", reg.short_name()),
         }.clone();
 
         if world.entity(entity).contains_type_id(type_id) {
@@ -73,18 +77,17 @@ impl Command for AddComponentCommand {
 
 pub struct PrefabProcessCommand {
     entity: Entity,
-    data: PrefabCommandData,
+    data: Arc<PrefabCommandData>,
 }
 
 impl Command for PrefabProcessCommand {
     fn write(self: Box<Self>, world: &mut World) {
         let entity = self.entity;
         let data = self.data;
-        let command_name = data.command_name.as_str();
+        let command_name = data.name.as_str();
 
         world.resource_scope(|world, registry: Mut<PrefabRegistry>| {
             let command = registry.get_command(command_name).unwrap().clone();
-
             command.run(data.properties.as_ref(), world, entity);
         });
     }

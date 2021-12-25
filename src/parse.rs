@@ -1,22 +1,20 @@
 use bevy::{
     prelude::*,
     reflect::{
-        DynamicList, DynamicStruct, DynamicTuple, DynamicTupleStruct, Reflect, ReflectRef,
-        TypeRegistration,
+        DynamicList, DynamicStruct, DynamicTuple, DynamicTupleStruct, Reflect,
     },
 };
 use pest::{error::Error, iterators::Pair, Parser};
 use pest_derive::*;
-use std::{any::Any, ops::Range, sync::Arc};
+use std::{ops::Range, sync::Arc};
 use thiserror::Error;
 
 use crate::{
-    commands::PrefabCommand,
     dynamic_cast::*,
     prefab::PrefabBuildStep,
-    registry::{ReflectType, TypeInfo},
+    registry::{ReflectType, TypeInfo, PrefabRegistry},
+    prefab::*, 
 };
-use crate::{prefab::*, registry::PrefabRegistry};
 
 #[derive(Parser)]
 #[grammar = "lazy_prefabs.pest"]
@@ -52,23 +50,29 @@ pub enum LoadPrefabError {
     ValueParseError(String, String),
     #[error("Error parsing prefab - unknown value rule: {0}.")]
     UnhandledValueRule(String),
+    #[error("Error reading prefab file.")]
+    FileReadError(#[from] std::io::Error),
 }
 
-pub fn parse_prefab_string(
+pub(crate) fn parse_prefab_string(
     input: &str,
-    registry: &PrefabRegistry,
+    registry: &mut PrefabRegistry,
 ) -> Result<Prefab, LoadPrefabError> {
+
     let mut parsed = PrefabParser::parse(Rule::prefab, input)?;
 
     parse_prefab(parsed.next().unwrap(), registry)
 }
 
 fn parse_prefab(pair: Pair<Rule>, registry: &PrefabRegistry) -> Result<Prefab, LoadPrefabError> {
-    //let mut name = None;
+    let mut name = None;
     let mut steps = Vec::new();
 
     for field in pair.into_inner() {
         match field.as_rule() {
+            Rule::type_name => {
+                name = Some(field.as_str().to_string());
+            }
             Rule::component => {
                 let comp = parse_component(field, registry)?;
                 steps.push(PrefabBuildStep::AddComponent(Arc::new(comp)));
@@ -84,7 +88,7 @@ fn parse_prefab(pair: Pair<Rule>, registry: &PrefabRegistry) -> Result<Prefab, L
         }
     }
 
-    Ok(Prefab { steps })
+    Ok(Prefab { name, steps })
 }
 
 fn parse_component(
@@ -282,7 +286,7 @@ fn parse_command(pair: Pair<Rule>) -> Result<PrefabCommandData, LoadPrefabError>
     }
 
     Ok(PrefabCommandData {
-        command_name,
+        name: command_name,
         properties,
     })
 }
@@ -290,16 +294,18 @@ fn parse_command(pair: Pair<Rule>) -> Result<PrefabCommandData, LoadPrefabError>
 #[cfg(test)]
 mod test {
     use bevy::prelude::*;
-    use bevy::reflect::DynamicStruct;
+    
     use pest::Parser;
 
     use crate::dynamic_cast::*;
+    use crate::parse::parse_prefab;
+    use crate::prefab::PrefabBuildStep;
     use crate::registry::PrefabRegistry;
     use crate::{
         dynamic_cast::GetValue,
         parse::{parse_component, parse_value, PrefabParser, Rule},
     };
-    use bevy::ecs::reflect::ReflectComponent;
+    
 
     use super::{parse_command, parse_field, parse_string};
 
@@ -319,6 +325,40 @@ mod test {
         let i = *props.get::<i32>("i");
 
         assert_eq!(i, 10);
+    }
+
+    #[test]
+    fn prefab_parse() {
+        let input = "SomeName { dosomething!(), Visible, Draw }";
+        let mut parsed = PrefabParser::parse(Rule::prefab, input).unwrap();
+        let mut reg = PrefabRegistry::default();
+        reg.register_type::<Visible>();
+        reg.register_type::<Draw>();
+
+        let prefab = parse_prefab(parsed.next().unwrap(), &mut reg).unwrap();
+
+        assert_eq!(prefab.name, Some("SomeName".to_string()));
+
+        match &prefab.steps[0] {
+            PrefabBuildStep::AddComponent(_) => unreachable!(),
+            PrefabBuildStep::RunCommand(command) => {
+                assert_eq!(command.name, "dosomething");
+            },
+        }
+
+        match &prefab.steps[1] {
+            PrefabBuildStep::AddComponent(comp) => {
+                assert_eq!(comp.type_name, "Visible");
+            },
+            PrefabBuildStep::RunCommand(_) => unreachable!(),
+        }
+
+        match &prefab.steps[2] {
+            PrefabBuildStep::AddComponent(comp) => {
+                assert_eq!(comp.type_name, "Draw");
+            },
+            PrefabBuildStep::RunCommand(_) => unreachable!(),
+        }
     }
 
     #[test]

@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, fs};
 
 use bevy::{
     prelude::*,
@@ -6,12 +6,18 @@ use bevy::{
     utils::HashMap,
 };
 
-use crate::commands::PrefabCommand;
+use crate::{
+    commands::PrefabCommand, 
+    prefab::Prefab, 
+    parse::LoadPrefabError,
+    parse::parse_prefab_string,
+};
 
 #[derive(Default)]
 pub struct PrefabRegistry {
     type_data: HashMap<String, TypeInfo>,
     commands: HashMap<String, Arc<dyn PrefabCommand + Send + Sync + 'static>>,
+    prefabs: HashMap<String, Arc<Prefab>>,
 }
 
 impl PrefabRegistry {
@@ -33,12 +39,11 @@ impl PrefabRegistry {
         self.type_data.get(name)
     }
 
-    pub fn register_command<T: PrefabCommand + Send + Sync + 'static>(
+    pub fn register_command<T: PrefabCommand + Default + Send + Sync + 'static>(
         &mut self,
-        name: &str,
-        command: T,
     ) {
-        self.commands.insert(name.to_string(), Arc::new(command));
+        let t = T::default();
+        self.commands.insert(t.key().to_string(), Arc::new(t));
     }
 
     pub fn get_command(
@@ -47,9 +52,33 @@ impl PrefabRegistry {
     ) -> Option<&Arc<dyn PrefabCommand + Send + Sync + 'static>> {
         self.commands.get(name)
     }
+
+    /// Load the prefab from disk, or retrieve it if it's already been loaded.
+    pub fn load(&mut self, name: &str) -> Result<&Arc<Prefab>, LoadPrefabError> {
+        if self.prefabs.contains_key(name) {
+            return Ok(self.prefabs.get(name).unwrap())
+        };
+
+        let path = ["assets/prefabs/", name].join("");
+
+        let prefab_string = match fs::read_to_string(path) {
+            Ok(str) => str,
+            Err(e) => return Err(LoadPrefabError::FileReadError(e)),
+        };
+
+        match parse_prefab_string(&prefab_string, self) {
+            Ok(prefab) => {
+                //let entry = self.prefab_map.entry(prefab_name.to_string());
+                let entry = self.prefabs.entry(name.to_string());
+                return Ok(entry.or_insert(Arc::new(prefab)));
+            }
+            Err(e) => return Err(e),
+        };
+    }
 }
 
 pub(crate) struct TypeInfo {
+    #[allow(dead_code)]
     pub type_name: String,
     pub reflect_type: ReflectType,
     pub registration: TypeRegistration,
@@ -80,50 +109,5 @@ impl From<ReflectRef<'_>> for ReflectType {
 
 #[cfg(test)]
 mod test {
-    use super::PrefabRegistry;
-    use crate::{commands::PrefabCommand, dynamic_cast::*};
-    use bevy::{
-        prelude::*,
-        reflect::{DynamicStruct, Reflect},
-    };
-
-    #[derive(Reflect, Default)]
-    #[reflect(Component)]
-    struct TestComponentA;
-
-    #[derive(Reflect, Default)]
-    #[reflect(Component)]
-    struct TestComponentB {
-        x: i32,
-    }
-
-    // #[test]
-    // fn load_test() {
-    //     let mut reg = PrefabRegistry::default();
-    //     reg.register_type::<TestComponentA>();
-    //     reg.register_type::<TestComponentB>();
-
-    //     let prefab = reg.try_load("test.prefab").unwrap();
-
-    //     let commands = prefab.commands();
-
-    //     assert_eq!(commands.len(), 2);
-
-    //     let component = match &commands[0] {
-    //         PrefabCommand::AddComponent(comp) => comp,
-    //         _ => unreachable!(),
-    //     };
-
-    //     assert_eq!(component.name(), "TestComponentA");
-
-    //     let compb = match &commands[1] {
-    //         PrefabCommand::AddComponent(comp) => comp,
-    //         _ => unreachable!(),
-    //     };
-    //     let root = compb.root();
-
-    //     let root = root.cast_ref::<DynamicStruct>();
-
-    //     assert_eq!(35, *root.get::<i32>("x"));
-    // }
+    
 }

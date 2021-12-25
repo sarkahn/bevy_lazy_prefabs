@@ -1,0 +1,3 @@
+{
+    InsertSpriteBundle!(texture_path: "alien.png", color: Color::RED),
+}
