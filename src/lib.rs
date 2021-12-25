@@ -5,7 +5,7 @@
 //!  A crate for simple human readable/writable prefab text files in bevy.
 //!
 //! Note: This is not intended to be a flexible and long-term prefab solution, but should serve well for
-//! simple games to avoid having to define your entities entirely in code.
+//! simple games and prototyping to avoid having to define your entities entirely in code.
 //!
 //! # .Prefab Files
 //!
