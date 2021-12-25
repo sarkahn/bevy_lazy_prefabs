@@ -2,6 +2,12 @@
 name = "bevy_lazy_prefabs"
 version = "0.2.0"
 edition = "2021"
+description = "Simple readable/writable prefab text files in bevy."
+authors = ["sark"]
+homepage = "https://github.com/sarkahn/bevy_lazy_prefabs"
+repository = "https://github.com/sarkahn/bevy_lazy_prefabs"
+license = "MIT"
+
 
 [dependencies]
 bevy = { version = "0.5", default-features = false, features = ["render"] }
