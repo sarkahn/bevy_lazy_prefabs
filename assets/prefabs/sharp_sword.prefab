@@ -1,0 +1,6 @@
+{
+    LoadPrefab!(name: "sword.prefab"),
+    DealsDamage {
+        value: 69420,
+    }
+}

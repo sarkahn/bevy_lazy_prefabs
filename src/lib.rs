@@ -1,5 +1,8 @@
 //! A crate for simple human readable/writable prefab text files in bevy.
 //! 
+//! Note: This is not intended to be a flexible and long-term prefab solution, but should serve well for
+//! simple games to avoid having to define your entities entirely in code.
+//! 
 //! # .Prefab Files
 //! 
 //! First, write a *.prefab* file and put it in the *assets/prefabs* directory. 
@@ -12,37 +15,58 @@
 //!     },
 //!     Visible,                   // If you choose not to initialize any fields, the braces can be omitted entirely.
 //!     Draw,
+//!     SomeComponent {            // Custom components are supported
+//!         some_int: 15,
+//!     },
 //! }
 //! ```
 //! 
-//! In the above example we are authoring a prefab with Transform, Visible and Draw components.
+//! In the above example we are authoring a prefab with `Transform`, `Visible`, `Draw`, and `SomeComponent` components.
 //! In this case the entity's transform will be initialized to position (15.0,10.0,0.0) when entity is spawned.
-//! This isn't much use though - the above entity won't be rendered since it has no mesh or material. 
-//! For that we can use a [PrefabProcessor].
 //! 
-//! # Processors
+//! Custom components will only work in prefabs if they derive `Reflect` and `Default`, and if they have the 
+//! `#[reflect(Component)]` attribute. Most built in bevy types already meet this constraint. They must also be 
+//! registered with the [PrefabRegistry] during setup.
 //! 
-//! Prefab processors allow you to include complex components that require extra steps
-//! to correctly initialize, such as meshes, materials, or bundles.
+//! The above prefab isn't much use though - the entity won't be rendered since it has no mesh or material. 
+//! For that we can use a [build_commands::BuildPrefabCommand].
 //! 
-//! Custom processors can be authored, but there are several included for more common components.
+//! # BuildPrefabCommands
+//! 
+//! Build commands allow you to include complex components that require extra steps to correctly initialize, 
+//! such as meshes, materials, or bundles.
+//! 
+//! Custom commands can be authored, but there are several included for more common components:
+//! - `InsertSpriteBundle` - Inserts a `SpriteBundle` on an entity. Can specify `color` and `texture_path`.
+//! - `SetColorMaterial` - Modify an existing `ColorMaterial` on the entity.
+//! - `LoadPrefab` - Load an existing prefab and perform it's build steps on the current entity. 
+//! - `InsertPbrBundle` - Inserts a `PbrBundle`. Can specify mesh `shape`, `size`, and `flip`.
+//! - `InsertOrthographicCameraBundle` - Inserts an `OrthographicCameraBundle`. Can specify `scale`.
+//! - `InsertPerspectiveCameraBundle` - Inserts a `PerspectiveCameraBundle`. Can specify `position` and `looking_at`.
+//! 
+//! 
+//! ## Example
 //! 
 //! ```ignore
 //! {
-//!     processor!(SpriteBundle {       // Processors are specified by `processor!(key)`
-//!         texture_path: "alien.png",  // The SpriteBundle processor will read the `texture_path`
-//!         color: Color::RED,          // And `color` properties from the *.prefab* file
-//!     })
+//!     InsertSpriteBundle! (          
+//!         texture_path: "alien.png", 
+//!         color: Color::RED,         
+//!     ),
 //! }
 //! ```
 //! 
-//! The above *.prefab* file will result in an entity with a `SpriteBundle`. The sprite bundle's `ColorMaterial`
-//! component will be initialized with the given texture and color. Note these 'fields' are not referring directly to fields
-//! in the bundle, but are optional properties that get passed to the processor and used in the initialization process.
+//! The above *.prefab* file will result in an entity with all the components from a  `SpriteBundle`. The sprite bundle's 
+//! `ColorMaterial` component will be initialized with the given texture and color. 
+//! 
+//! Note these 'fields' are not referring directly to fields in the bundle, but are optional properties that get passed 
+//! to the build command and used in the initialization process. How these properties get used is defined by every 
+//! individual build command.
 //! 
 //! # Spawning A Prefab
 //! 
-//! Once you have your *.prefab* file in the *assets/prefabs* directory you can spawn a prefab via `Commands`:
+//! Once you have your *.prefab* file in the *assets/prefabs* directory you can spawn a prefab using the 
+//! [PrefabRegistry] and `Commands`:
 //! 
 //! ```
 //! use bevy::prelude::*;
@@ -57,18 +81,15 @@
 //! ``` 
 
 mod bevy_commands;
-mod build_commands;
 mod dynamic_cast;
 mod parse;
 mod plugin;
 mod prefab;
 mod registry;
 
+pub mod build_commands;
+
 pub use bevy_commands::SpawnPrefabCommands;
+pub use prefab::Prefab;
 pub use plugin::LazyPrefabsPlugin;
 pub use registry::PrefabRegistry;
-
-pub mod prefab_commands {
-    /// Hi
-    pub use crate::build_commands::InsertSpriteBundle;
-}

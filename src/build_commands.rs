@@ -1,3 +1,5 @@
+//! Commands used for handling more complex prefab entity initialization, such as bundles, materials, and meshes.
+
 use bevy::{prelude::*, reflect::DynamicStruct};
 
 use crate::{dynamic_cast::*, PrefabRegistry};
@@ -110,7 +112,7 @@ fn get_color_material(
     Some(materials.add(mat))
 }
 
-/// Loads a prefab and applies it's components/commands to the entity.
+/// Loads a prefab and performs it's build steps on the entity.
 ///
 /// ### Required Property:
 ///
@@ -135,7 +137,8 @@ impl BuildPrefabCommand for LoadPrefab {
                                 let type_id = reg.type_id();
                                 let reflect = match reg.data::<ReflectComponent>() {
                                     Some(reflect) => reflect,
-                                    None => panic!("Error reading reflect data. Does the type {} have the '#[reflect(Component)]' attribute?", reg.short_name()),
+                                    None => panic!("Error reading reflect data. 
+                                        Does the type {} have the '#[reflect(Component)]' attribute?", reg.short_name()),
                                 }.clone();
                                 if world.entity(entity).contains_type_id(type_id) {
                                     reflect.apply_component(world, entity, &*comp.reflect);
@@ -160,7 +163,7 @@ impl BuildPrefabCommand for LoadPrefab {
     }
 }
 
-/// Inserts a sprite bundle.
+/// Inserts a [SpriteBundle].
 ///
 /// ### Optional Properties:
 ///

@@ -1,0 +1,6 @@
+{
+    InsertSpriteBundle!(texture_path: "sword.png"),
+    DealsDamage,
+    Equippable,
+    Item,
+}

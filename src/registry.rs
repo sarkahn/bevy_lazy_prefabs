@@ -22,11 +22,28 @@ impl PrefabRegistry {
     /// Register a component for use in a [Prefab].
     /// 
     /// This must be called during setup on any component that gets loaded 
-    /// from a *.prefab* file. Prefab components must have derive `Default` and `Reflect`
+    /// from a *.prefab* file. Prefab components must derive `Default` and `Reflect`
     /// and have the `#[reflect(Component)]` attribute.
     /// 
     /// Note: Most built in bevy types are automatically registered during plugin
     /// initialization.
+    /// 
+    /// ## Example
+    /// 
+    /// ```
+    /// use bevy::prelude::*;
+    /// use bevy_lazy_prefabs::*;
+    /// 
+    /// #[derive(Default, Reflect)]
+    /// #[reflect(Component)]
+    /// struct MyComponent {
+    ///     i: i32,
+    /// }
+    /// 
+    /// fn setup(mut registry: ResMut<PrefabRegistry>) {
+    ///     registry.register_type::<MyComponent>();
+    /// }
+    /// ```
     pub fn register_type<T: Reflect + GetTypeRegistration + Default>(&mut self) {
         let reg = T::get_type_registration();
         let instance = T::default();
@@ -41,7 +58,7 @@ impl PrefabRegistry {
         self.type_data.insert(name, info);
     }
 
-    /// Register a [PrefabCommand] for use in a [Prefab].
+    /// Register a [BuildPrefabCommand] for use in a [Prefab].
     /// 
     /// This must be called during setup on any command that gets loaded
     /// from a *.prefab* file.
@@ -124,6 +141,3 @@ impl From<ReflectRef<'_>> for ReflectType {
         }
     }
 }
-
-#[cfg(test)]
-mod test {}
