@@ -1,6 +1,6 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Crates.io](https://img.shields.io/crates/v/bevy_lazy_prefabs)](https://crates.io/crates/bevy_lazy_prefabs)
-[![docs](https://docs.rs/bevy_tiled_camera/badge.svg)](https://docs.rs/bevy_lazy_prefabs/)
+[![docs](https://docs.rs/bevy_lazy_prefabs/badge.svg)](https://docs.rs/bevy_lazy_prefabs/)
 
 # Bevy Lazy Prefabs
 
@@ -12,7 +12,7 @@ simple games and prototyping to avoid having to define your entities entirely in
 # .Prefab Files
 
 First, write a *.prefab* file and put it in the *assets/prefabs* directory. 
-```rs
+```rust
 SomePrefab {                   // Prefab name is optional. Outer braces are required. 
     Transform {                // Components are listed by type name.
         translation : Vec3 {   // Component fields can be initialized inside nested curly braces.
@@ -53,7 +53,7 @@ Custom commands can be authored, but there are several included for more common 
 
 ## Example
 
-```rs
+```rust
 {
     InsertSpriteBundle! (          
         texture_path: "alien.png", 
@@ -74,7 +74,7 @@ individual build command.
 Once you have your *.prefab* file in the *assets/prefabs* directory you can spawn a prefab using the 
 [PrefabRegistry] and `Commands`:
 
-```rs
+```rust
 use bevy::prelude::*;
 use bevy_lazy_prefabs::*;
 
