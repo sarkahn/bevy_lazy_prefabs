@@ -72,7 +72,7 @@ individual build command.
 # Spawning A Prefab
 
 Once you have your *.prefab* file in the *assets/prefabs* directory you can spawn a prefab using the 
-[PrefabRegistry] and `Commands`:
+`PrefabRegistry` and `Commands`:
 
 ```rust
 use bevy::prelude::*;
