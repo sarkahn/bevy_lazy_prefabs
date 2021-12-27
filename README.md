@@ -32,10 +32,10 @@ In this case the entity's transform will be initialized to position (15.0,10.5,0
 
 Custom components will only work in prefabs if they derive `Reflect` and `Default`, and if they have the 
 `#[reflect(Component)]` attribute. Most built in bevy types already meet this constraint. They must also be 
-registered with the [PrefabRegistry] during setup.
+registered with the `PrefabRegistry` during setup.
 
 The above prefab isn't much use though - the entity won't be rendered since it has no mesh or material. 
-For that we can use a [build_commands::BuildPrefabCommand].
+For that we can use a `BuildPrefabCommand`.
 
 # BuildPrefabCommands
 
