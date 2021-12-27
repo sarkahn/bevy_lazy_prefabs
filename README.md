@@ -4,7 +4,7 @@
 
 # Bevy Lazy Prefabs
 
-A crate for simple human readable/writable prefab text files in bevy.
+A crate for "simple" human readable/writable prefab text files in bevy.
 
 Note: This is not intended to be a flexible and long-term prefab solution, but should serve well for
 simple games and prototyping to avoid having to define your entities entirely in code.
