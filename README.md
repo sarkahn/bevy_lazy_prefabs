@@ -28,7 +28,7 @@ SomePrefab {                   // Prefab name is optional. Outer braces are requ
 ```
 
 In the above example we are authoring a prefab with `Transform`, `Visible`, `Draw`, and `SomeComponent` components.
-In this case the entity's transform will be initialized to position (15.0,10.0,0.0) when entity is spawned.
+In this case the entity's transform will be initialized to position (15.0,10.5,0.0) when the entity is spawned.
 
 Custom components will only work in prefabs if they derive `Reflect` and `Default`, and if they have the 
 `#[reflect(Component)]` attribute. Most built in bevy types already meet this constraint. They must also be 
